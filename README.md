@@ -1,6 +1,6 @@
 # Introduction
 
-`refactor` is a tool that analyzes a source tree (C/C++ currently) and identifies blocks of code that appear to be similar.  The similar blocks can be refactored out into common functions or templates.
+`refactor` is a tool that analyzes a source tree (C/C++ currently) and identifies blocks of code that appear to be similar.  Code blocks that are similar can be refactored out into common functions or templates *(not a part of this tool)*.
 
 # Identifying Similar Blocks
 
