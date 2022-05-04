@@ -1,18 +1,20 @@
-#!/usr/bin/env python
-import os, sys, time
+#!/usr/bin/env python3
+import io, os, sys, time
 
 # TODO
 # - diff <small> <large> (instead of *)
 # - section headers
 # - diff from large to small
+# - scrolling spinner bug
 #
-
 
 from difflib import SequenceMatcher as SM
 from difflib import ndiff as ndiff
 
 #------------------------------------------------------------------------------
-# misc
+#
+#  Misc
+#
 #------------------------------------------------------------------------------
 
 def spinning_cursor():
@@ -36,10 +38,11 @@ def print_spinner(f, rate=30000, force=0):
 #------------------------------------------------------------------------------
 
 code     = 0 # normal code
-string1  = 1 # "abc"
-string2  = 2 # 'd'
-comment1 = 3 # // comment
-comment2 = 4 # /* comment */
+macro    = 1 # #define ...
+string1  = 2 # "abc"
+string2  = 3 # 'd'
+comment1 = 4 # // comment
+comment2 = 5 # /* comment */
 
 state  = code
 indent = 0
@@ -81,7 +84,7 @@ def process(file, ch, line):
     if ch == '}' and state == code:
        indent -= 1
        if not stack:
-          print '[!]', file # error
+          print('[!]', file) # error
           return False
        b = stack.pop()
        b.range[1] = line
@@ -99,8 +102,8 @@ def process(file, ch, line):
 import argparse
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--min-block-size', default=1000, type=int)
 parser.add_argument('--max-block-diff', default=500, type=int)
-parser.add_argument('--min-block-size', default=600, type=int)
 parser.add_argument('--same-level', default=True, type=bool)
 parser.add_argument('--similarity', default=0.8, type=float)
 parser.add_argument('--diff-width', default=180, type=int)
@@ -108,12 +111,14 @@ parser.add_argument('--diff-width', default=180, type=int)
 args, inputs = parser.parse_known_args()
 
 #------------------------------------------------------------------------------
-# parsing
+#
+#  Parsing
+#
 #------------------------------------------------------------------------------
 
 if not inputs: inputs = [ sys.stdin ]
 
-if not isinstance(inputs[0], file): inputs = [ open(f, 'r') for f in inputs]
+if not isinstance(inputs[0], io.IOBase): inputs = [open(f, 'r') for f in inputs]
 
 for f in inputs:
 
@@ -127,6 +132,8 @@ for f in inputs:
     if ch == '\n': line += 1
 
     if state == code:
+       if ch == '#':
+          state = macro
        if ch == '"':
           state = string1
        if ch == "'":
@@ -148,7 +155,7 @@ for f in inputs:
        if ch == "'":
           state = code
 
-    elif state == comment1:
+    elif state == comment1 or state == macro:
        if ch == '\n':
           state = code
 
@@ -165,14 +172,17 @@ for f in inputs:
 
   #end
 
+  if indent: indent = 0 # warning
+
 #end
 
 [ f.close() for f in inputs ]
 
-assert indent == 0
 
 #------------------------------------------------------------------------------
-# processing
+#
+#  Processing
+#
 #------------------------------------------------------------------------------
 
 # filter out small blocks
@@ -215,9 +225,9 @@ index = 1000
 
 L = len(blocks)
 
-for i in xrange(0, L-1):
+for i in range(0, L-1):
 
-   for j in xrange(i+1, L-1):
+   for j in range(i+1, L-1):
 
       index += 1
 
@@ -258,7 +268,9 @@ for i in xrange(0, L-1):
 #end
 
 #------------------------------------------------------------------------------
-# post-processing
+#
+#  Post-processing
+#
 #------------------------------------------------------------------------------
 
 print_spinner('post processing')
@@ -282,6 +294,7 @@ def diff2html(df):
 
     html = ""
     width = args.diff_width
+    middle = int(width/2)
 
     DIV  = GRY + VSP + ESP
     DIV2 = YEL + VSP + ESP
@@ -295,9 +308,9 @@ def diff2html(df):
         line = line[:-1]
         line += ' '*(width-len(line))
 
-        dm = line[width/2-1]
-        L1 = line[:width/2-1]
-        L2 = line[width/2:]
+        dm = line[middle-1]
+        L1 = line[:middle-1]
+        L2 = line[middle:]
 
         if dm == ' ':
            html += "%s%s%s" % (L1, DIV, L2) + '\n'
@@ -320,6 +333,8 @@ def diff2html(df):
                        S1 += i[2]
                     else:
                        S1 += RED + i[2] + ESP
+                 #end
+              #end
               html += '%s%s%s' % (S1, DIV2, S2) + '\n'
            elif dm == '>':
               html += '%s%s%s%s%s' % (GRN, L1, ESP, DIV, L2) + '\n'
@@ -344,8 +359,10 @@ for file in os.listdir('%s/diffs/' % root):
     with open(file, 'w') as f: f.write(html)
 #end
 
-os.system('cat %s/diffs/*.html > /home/forhad/tmp/diffs.html' % root)
+print_spinner('', force=1)
 
+os.system('echo $(ls %s/diffs/*.html 2>/dev/null | wc -l) similar' % root)
+os.system('cat %s/diffs/*.html > ~/diffs.html 2>/dev/null' % root)
 os.system('sudo rm -rf %s' % root)
 
-print_spinner('', force=1)
+
