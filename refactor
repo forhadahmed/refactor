@@ -1,0 +1,351 @@
+#!/usr/bin/env python
+import os, sys, time
+
+# TODO
+# - diff <small> <large> (instead of *)
+# - section headers
+# - diff from large to small
+#
+
+
+from difflib import SequenceMatcher as SM
+from difflib import ndiff as ndiff
+
+#------------------------------------------------------------------------------
+# misc
+#------------------------------------------------------------------------------
+
+def spinning_cursor():
+    while True:
+      for cursor in ['[|]','[/]','[-]','[\\]']:
+        yield cursor
+
+spinner = spinning_cursor()
+mlen = 0
+sidx = 0
+
+def print_spinner(f, rate=30000, force=0):
+    global mlen,sidx
+    sidx += 1
+    if not (sidx % rate) or force:
+       sys.stdout.write(next(spinner) + ' ' + f)
+       sys.stdout.flush()
+       sys.stdout.write(' '*(mlen+10) +'\r')
+       sys.stdout.flush()
+
+#------------------------------------------------------------------------------
+
+code     = 0 # normal code
+string1  = 1 # "abc"
+string2  = 2 # 'd'
+comment1 = 3 # // comment
+comment2 = 4 # /* comment */
+
+state  = code
+indent = 0
+stack  = []
+blocks = []
+
+class block:
+   def __init__(self, file, line, indent, parent):
+       self.file = file
+       self.range = [line,-1]
+       self.indent = indent
+       self.parent = parent
+       self.code = []
+       self.children = []
+   #end
+
+   def add_code(self, c):
+       self.code += [c]
+       if self.parent: self.parent.add_code(c)
+   #end
+#end
+
+
+def process(file, ch, line):
+
+    global state, indent, stack, blocks
+    top = stack[-1] if stack else None
+
+    # start of block
+    if ch == '{' and state == code:
+       indent += 1
+       b = block(file, line, indent, top)
+       if top: top.children.append(b)
+       stack.append(b)
+       blocks.append(b)
+    #end
+
+    # end of block
+    if ch == '}' and state == code:
+       indent -= 1
+       if not stack:
+          print '[!]', file # error
+          return False
+       b = stack.pop()
+       b.range[1] = line
+
+    #end
+
+    print_spinner(file)
+
+    if top: top.add_code(ch)
+
+    return True;
+
+#end
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--max-block-diff', default=500, type=int)
+parser.add_argument('--min-block-size', default=600, type=int)
+parser.add_argument('--same-level', default=True, type=bool)
+parser.add_argument('--similarity', default=0.8, type=float)
+parser.add_argument('--diff-width', default=180, type=int)
+
+args, inputs = parser.parse_known_args()
+
+#------------------------------------------------------------------------------
+# parsing
+#------------------------------------------------------------------------------
+
+if not inputs: inputs = [ sys.stdin ]
+
+if not isinstance(inputs[0], file): inputs = [ open(f, 'r') for f in inputs]
+
+for f in inputs:
+
+  line = 1
+  mlen = max(len(f.name), mlen)
+
+  while 1:
+    ch = f.read(1)
+    if not ch: break
+
+    if ch == '\n': line += 1
+
+    if state == code:
+       if ch == '"':
+          state = string1
+       if ch == "'":
+          state = string2
+       if ch == '/':
+          if not process(f.name, ch, line): break
+          ch = f.read(1)
+          if not ch: break
+          if ch == '/':
+             state = comment1
+          if ch == '*':
+             state = comment2
+
+    elif state == string1:
+       if ch == '"':
+          state = code
+
+    elif state == string2:
+       if ch == "'":
+          state = code
+
+    elif state == comment1:
+       if ch == '\n':
+          state = code
+
+    elif state == comment2:
+       if ch == '*':
+          if not process(f.name, ch, line): break
+          ch = f.read(1)
+          if not ch: break
+          if ch == '/':
+             state = code
+    #end
+
+    if not process(f.name, ch, line): break
+
+  #end
+
+#end
+
+[ f.close() for f in inputs ]
+
+assert indent == 0
+
+#------------------------------------------------------------------------------
+# processing
+#------------------------------------------------------------------------------
+
+# filter out small blocks
+blocks = [ b for b in blocks if len(b.code) > args.min_block_size ]
+
+blocks = sorted(blocks, key=lambda x: len(x.code), reverse=True)
+
+for b in blocks: b.code = ''.join(b.code)
+
+skip = []
+
+def skip_children(b):
+    global skip
+    for ch in b.children:
+      if ch in blocks:
+        skip += [blocks.index(ch)]
+        skip_children(ch)
+    #end
+#end
+
+def ancestor(a, b):
+    p = a.parent
+    while p:
+       if b == p: return 1
+       p = p.parent
+    #end
+    return 0
+#end
+
+def dash(fname):
+    if fname[0] == '/': fname = fname[1:]
+    return fname.replace('/', '-')
+
+root = '/tmp/refactor-%d' % os.getpid()
+
+os.system('mkdir -p %s/diffs' % root)
+os.system('mkdir -p %s/files' % root)
+
+index = 1000
+
+L = len(blocks)
+
+for i in xrange(0, L-1):
+
+   for j in xrange(i+1, L-1):
+
+      index += 1
+
+      print_spinner('comparing blocks %4d - %4d' % (i,j), rate=200)
+
+      # skip if either block is a child of matched block
+      if i in skip or j in skip: continue
+
+      bi = blocks[i]; bj = blocks[j]
+
+      # skip if one block is a parent of another
+      if ancestor(bi, bj) or ancestor(bj, bi): continue
+
+      # skip if the length of code sections differs by a threshold
+      if abs(len(bi.code)-len(bj.code)) > args.max_block_diff: continue
+
+      # skip if blocks are not on the same level
+      if args.same_level and bi.indent != bj.indent: continue
+
+      # do the comparison (skip if blocks are not similar)
+      sm = SM(None, bi.code, bj.code)
+      if sm.quick_ratio() < 0.8: continue
+      r = sm.ratio()
+      if r < 0.8: continue
+
+      # found similar blocks - add their children to the skip list
+      skip_children(bi); skip_children(bj)
+
+      # save the blocks for post-processing
+      fstr = '%s/files/%d-%s-%d-%d'
+      bi_args = (root, index, dash(bi.file), bi.range[0], bi.range[1])
+      bj_args = (root, index, dash(bj.file), bj.range[0], bj.range[1])
+      with open(fstr % bi_args, 'w') as f: f.write(bi.code)
+      with open(fstr % bj_args, 'w') as f: f.write(bj.code)
+
+   #end
+
+#end
+
+#------------------------------------------------------------------------------
+# post-processing
+#------------------------------------------------------------------------------
+
+print_spinner('post processing')
+
+os.system("""
+ls -S %s/files/     \
+  | cut -d '-' -f1  \
+  | uniq | sort     \
+  | xargs -n1 -I {} \
+    sh -c 'diff -t -y --width=%d %s/files/{}* > %s/diffs/{}.diff'
+""" % (root, args.diff_width, root, root))
+
+VSP = '&#9474' # vertical separator
+GRN = '<span style="background:#ccffcc">'
+RED = '<span style="background:#ffcccc">'
+GRY = '<span style="color:#cccccc">'
+YEL = '<span style="color:#ffd480">'
+ESP = '</span>'
+
+def diff2html(df):
+
+    html = ""
+    width = args.diff_width
+
+    DIV  = GRY + VSP + ESP
+    DIV2 = YEL + VSP + ESP
+
+    html += '<pre style='
+    html += '"background:white;'
+    html += 'border:none;text-align:center">\n'
+
+    for line in df:
+
+        line = line[:-1]
+        line += ' '*(width-len(line))
+
+        dm = line[width/2-1]
+        L1 = line[:width/2-1]
+        L2 = line[width/2:]
+
+        if dm == ' ':
+           html += "%s%s%s" % (L1, DIV, L2) + '\n'
+        else:
+           if dm == '|':
+              nd = ndiff(L1, L2)
+              S1 = ''
+              S2 = ''
+              for i in nd:
+                 if i[0] == ' ':
+                    S1 += i[2]
+                    S2 += i[2]
+                 if i[0] == '+':
+                    if i[2].isspace():
+                       S2 += i[2]
+                    else:
+                       S2 += GRN + i[2] + ESP
+                 if i[0] == '-':
+                    if i[2].isspace():
+                       S1 += i[2]
+                    else:
+                       S1 += RED + i[2] + ESP
+              html += '%s%s%s' % (S1, DIV2, S2) + '\n'
+           elif dm == '>':
+              html += '%s%s%s%s%s' % (GRN, L1, ESP, DIV, L2) + '\n'
+           elif dm == '<':
+              html += '%s%s%s%s%s' % (L1, DIV, RED, L2, ESP) + '\n'
+           #end
+
+        #end
+
+    #end
+
+    html += '</pre>\n'
+
+    return html
+
+#end
+
+for file in os.listdir('%s/diffs/' % root):
+    file = '%s/diffs/%s' % (root, file)
+    with open(file, 'r') as f: html = diff2html(f)
+    file = file.replace('.diff', '.html')
+    with open(file, 'w') as f: f.write(html)
+#end
+
+os.system('cat %s/diffs/*.html > /home/forhad/tmp/diffs.html' % root)
+
+os.system('sudo rm -rf %s' % root)
+
+print_spinner('', force=1)
