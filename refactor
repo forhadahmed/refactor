@@ -250,8 +250,7 @@ for i in range(0, L-1):
       # do the comparison (skip if blocks are not similar)
       sm = SM(None, bi.code, bj.code)
       if sm.quick_ratio() < 0.8: continue
-      r = sm.ratio()
-      if r < 0.8: continue
+      if sm.ratio() < 0.8: continue
 
       # found similar blocks - add their children to the skip list
       skip_children(bi); skip_children(bj)
@@ -290,6 +289,8 @@ GRY = '<span style="color:#cccccc">'
 YEL = '<span style="color:#ffd480">'
 ESP = '</span>'
 
+def escape(s): return s.replace('<', '&lt;')
+
 def diff2html(df):
 
     html = ""
@@ -309,8 +310,8 @@ def diff2html(df):
         line += ' '*(width-len(line))
 
         dm = line[middle-1]
-        L1 = line[:middle-1]
-        L2 = line[middle:]
+        L1 = escape(line[:middle-1])
+        L2 = escape(line[middle:])
 
         if dm == ' ':
            html += "%s%s%s" % (L1, DIV, L2) + '\n'
@@ -336,10 +337,10 @@ def diff2html(df):
                  #end
               #end
               html += '%s%s%s' % (S1, DIV2, S2) + '\n'
-           elif dm == '>':
-              html += '%s%s%s%s%s' % (GRN, L1, ESP, DIV, L2) + '\n'
            elif dm == '<':
-              html += '%s%s%s%s%s' % (L1, DIV, RED, L2, ESP) + '\n'
+              html += '%s%s%s%s%s' % (RED, L1, ESP, DIV, L2) + '\n'
+           elif dm == '>':
+              html += '%s%s%s%s%s' % (L1, DIV, GRN, L2, ESP) + '\n'
            #end
 
         #end
