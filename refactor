@@ -2,9 +2,12 @@
 import io, os, sys, time
 
 # TODO
+# - reduce parse errors
+# - line number inaccuracy
+# - collapsible sections?
+# - section links within document
+# - section links to source code (external)
 # - diff <small> <large> (instead of *)
-# - section headers
-# - diff from large to small
 # - scrolling spinner bug
 #
 
@@ -104,9 +107,11 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--min-block-size', default=1000, type=int)
 parser.add_argument('--max-block-diff', default=500, type=int)
-parser.add_argument('--same-level', default=True, type=bool)
 parser.add_argument('--similarity', default=0.8, type=float)
 parser.add_argument('--diff-width', default=180, type=int)
+parser.add_argument('--no-cleanup', action='store_true')
+parser.add_argument('--all-levels', action='store_true')
+parser.add_argument('--all-files', action='store_true')
 
 args, inputs = parser.parse_known_args()
 
@@ -116,67 +121,68 @@ args, inputs = parser.parse_known_args()
 #
 #------------------------------------------------------------------------------
 
-if not inputs: inputs = [ sys.stdin ]
-
-if not isinstance(inputs[0], io.IOBase): inputs = [open(f, 'r') for f in inputs]
-
-for f in inputs:
+for fn in inputs:
 
   line = 1
-  mlen = max(len(f.name), mlen)
+  mlen = max(len(fn), mlen)
 
-  while 1:
-    ch = f.read(1)
-    if not ch: break
+  with open(fn) as f:
 
-    if ch == '\n': line += 1
+    ch = 0; pch = 0
 
-    if state == code:
-       if ch == '#':
-          state = macro
-       if ch == '"':
-          state = string1
-       if ch == "'":
-          state = string2
-       if ch == '/':
-          if not process(f.name, ch, line): break
-          ch = f.read(1)
-          if not ch: break
-          if ch == '/':
-             state = comment1
-          if ch == '*':
-             state = comment2
+    while 1:
 
-    elif state == string1:
-       if ch == '"':
-          state = code
+      ch = f.read(1)
+      if not ch: break
 
-    elif state == string2:
-       if ch == "'":
-          state = code
+      if ch == '\n': line += 1
 
-    elif state == comment1 or state == macro:
-       if ch == '\n':
-          state = code
+      if state == code:
+         if ch == '#':
+            state = macro
+         if ch == '"':
+            state = string1
+         if ch == "'":
+            state = string2
+         if ch == '/':
+            if not process(fn, ch, line): break
+            ch = f.read(1)
+            if not ch: break
+            if ch == '/':
+               state = comment1
+            if ch == '*':
+               state = comment2
 
-    elif state == comment2:
-       if ch == '*':
-          if not process(f.name, ch, line): break
-          ch = f.read(1)
-          if not ch: break
-          if ch == '/':
-             state = code
-    #end
+      elif state == string1:
+         if ch == '"':
+            state = code
 
-    if not process(f.name, ch, line): break
+      elif state == string2:
+         if ch == "'":
+            state = code
 
-  #end
+      elif state == comment1 or state == macro:
+         if ch == '\n' and pch != '\\':
+            state = code
+
+      elif state == comment2:
+         if ch == '*':
+            if not process(fn, ch, line): break
+            ch = f.read(1)
+            if not ch: break
+            if ch == '/':
+               state = code
+      #end
+
+      if not process(fn, ch, line): break
+
+      pch = ch
+
+   #end
 
   if indent: indent = 0 # warning
 
 #end
-
-[ f.close() for f in inputs ]
 
 
 #------------------------------------------------------------------------------
@@ -216,6 +222,27 @@ def dash(fname):
     if fname[0] == '/': fname = fname[1:]
     return fname.replace('/', '-')
 
+fcache = {}
+
+# return true to skip block comparison based on filenames
+def skip_unrelated_files(f1, f2):
+    if args.all_files: return False
+    global fcache
+    if (f1,f2) in fcache: return fcache[(f1,f2)]
+    if (f2,f1) in fcache: return fcache[(f2,f1)]
+    if f1 == f2:
+       return False
+    else:
+       if SM(None, f1, f2).ratio() < 0.9:
+          fcache[(f1,f2)] = True
+          return True
+       else:
+          fcache[(f1,f2)] = False
+          return False
+       #end
+    #end
+#end
+
 root = '/tmp/refactor-%d' % os.getpid()
 
 os.system('mkdir -p %s/diffs' % root)
@@ -238,6 +265,9 @@ for i in range(0, L-1):
 
       bi = blocks[i]; bj = blocks[j]
 
+      # skip if filenames are unrelated
+      if skip_unrelated_files(bi.file, bj.file): continue
+
       # skip if one block is a parent of another
       if ancestor(bi, bj) or ancestor(bj, bi): continue
 
@@ -245,7 +275,7 @@ for i in range(0, L-1):
       if abs(len(bi.code)-len(bj.code)) > args.max_block_diff: continue
 
       # skip if blocks are not on the same level
-      if args.same_level and bi.indent != bj.indent: continue
+      if not args.all_levels and bi.indent != bj.indent: continue
 
       # do the comparison (skip if blocks are not similar)
       sm = SM(None, bi.code, bj.code)
@@ -265,6 +295,7 @@ for i in range(0, L-1):
    #end
 
 #end
+
 
 #------------------------------------------------------------------------------
 #
@@ -289,9 +320,9 @@ GRY = '<span style="color:#cccccc">'
 YEL = '<span style="color:#ffd480">'
 ESP = '</span>'
 
-def escape(s): return s.replace('<', '&lt;')
+def esc(s): return s.replace('<', '&lt;')
 
-def diff2html(df):
+def diff2html(df, F1, R1, F2, R2):
 
     html = ""
     width = args.diff_width
@@ -299,6 +330,21 @@ def diff2html(df):
 
     DIV  = GRY + VSP + ESP
     DIV2 = YEL + VSP + ESP
+
+    html += '<pre style='
+    html += '"background:white;'
+    html += 'border:none;text-align:center">'
+    html += '<span style="border:1px #ccc solid;'
+    html += 'border-radius:5px;padding:5px;font-weight:bold">'
+
+    H1 = ' %s (%s)' % (F1, R1)
+    H2 = ' %s (%s)' % (F2, R2)
+
+    html += ( H1 + ' '*(middle-len(H1)-1) )
+    html += VSP
+    html += ( H2 + ' '*(middle-len(H1)) )
+
+    html += '</span></pre>\n'
 
     html += '<pre style='
     html += '"background:white;'
@@ -310,60 +356,91 @@ def diff2html(df):
         line += ' '*(width-len(line))
 
         dm = line[middle-1]
-        L1 = escape(line[:middle-1])
-        L2 = escape(line[middle:])
+        L1 = line[:middle-1]
+        L2 = line[middle:]
 
         if dm == ' ':
-           html += "%s%s%s" % (L1, DIV, L2) + '\n'
+           L1 = esc(L1); L2 = esc(L2)
+           html += "%s%s%s\n" % (L1, DIV, L2)
         else:
            if dm == '|':
               nd = ndiff(L1, L2)
               S1 = ''
               S2 = ''
               for i in nd:
+                 ch = esc(i[2])
                  if i[0] == ' ':
-                    S1 += i[2]
-                    S2 += i[2]
+                    S1 += ch
+                    S2 += ch
                  if i[0] == '+':
-                    if i[2].isspace():
-                       S2 += i[2]
+                    if ch.isspace():
+                       S2 += ch
                     else:
-                       S2 += GRN + i[2] + ESP
+                       S2 += GRN + ch + ESP
                  if i[0] == '-':
-                    if i[2].isspace():
-                       S1 += i[2]
+                    if ch.isspace():
+                       S1 += ch
                     else:
-                       S1 += RED + i[2] + ESP
+                       S1 += RED + ch + ESP
                  #end
               #end
-              html += '%s%s%s' % (S1, DIV2, S2) + '\n'
-           elif dm == '<':
-              html += '%s%s%s%s%s' % (RED, L1, ESP, DIV, L2) + '\n'
-           elif dm == '>':
-              html += '%s%s%s%s%s' % (L1, DIV, GRN, L2, ESP) + '\n'
+              html += '%s%s%s\n' % (S1, DIV2, S2)
+           else:
+              L1 = esc(L1); L2 = esc(L2)
+              if dm == '<':
+                 html += '%s%s%s%s%s\n' % (RED, L1, ESP, DIV, L2)
+              if dm == '>':
+                 html += '%s%s%s%s%s\n' % (L1, DIV, GRN, L2, ESP)
            #end
 
         #end
 
     #end
 
-    html += '</pre>\n'
+    html += '</pre><br>\n'
 
     return html
 
 #end
 
-for file in os.listdir('%s/diffs/' % root):
-    file = '%s/diffs/%s' % (root, file)
-    with open(file, 'r') as f: html = diff2html(f)
+import glob
+
+files = glob.glob('%s/files/*' % root)
+
+for file in glob.glob('%s/diffs/*.diff' % root): # sort by size
+
+    tag = file.split('/')[-1].split('.')[0]
+    ftag = [ f for f in files if ('files/%s' % tag) in f ]
+    ftag = [ f.replace('%s/files/' % root, '') for f in ftag ]
+    ftag = [ f.replace('%s-'% tag, '') for f in ftag]
+
+    f = ftag[0]
+    d = f[:f.rfind('-')].rfind('-')
+    r = f[d+1:]
+    f = f[:d]
+    f = [ i for i in inputs if dash(i) in f ][0]
+    F1 = f; R1 = r
+
+    f = ftag[1]
+    d = f[:f.rfind('-')].rfind('-')
+    r = f[d+1:]
+    f = f[:d]
+    f = [ i for i in inputs if dash(i) in f ][0]
+    F2 = f; R2 = r
+
+    with open(file, 'r') as f: html = diff2html(f, F1, R1, F2, R2)
     file = file.replace('.diff', '.html')
     with open(file, 'w') as f: f.write(html)
+
 #end
+
 
 print_spinner('', force=1)
 
-os.system('echo $(ls %s/diffs/*.html 2>/dev/null | wc -l) similar' % root)
-os.system('cat %s/diffs/*.html > ~/diffs.html 2>/dev/null' % root)
-os.system('sudo rm -rf %s' % root)
+DN = '2>/dev/null'
+os.system('echo $(ls %s/d*/*.*ml %s | wc -l) similar' % (root, DN))
+os.system('ls -S %s/d*/*.*ml %s | xargs cat > ~/diffs.html ' % (root, DN))
+
+if not args.no_cleanup: os.system('sudo rm -rf %s' % root)
 
 
