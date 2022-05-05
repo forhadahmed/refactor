@@ -12,6 +12,21 @@ import io, os, sys, time
 
 from difflib import SequenceMatcher as SM
 from difflib import ndiff as ndiff
+#------------------------------------------------------------------------------
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--min-block-size', default=1000, type=int)
+parser.add_argument('--max-block-diff', default=500, type=int)
+parser.add_argument('--similarity', default=0.8, type=float)
+parser.add_argument('--diff-width', default=180, type=int)
+parser.add_argument('--no-cleanup', action='store_true')
+parser.add_argument('--all-levels', action='store_true')
+parser.add_argument('--all-files', action='store_true')
+parser.add_argument('-o')
+
+args, inputs = parser.parse_known_args()
 
 #------------------------------------------------------------------------------
 #
@@ -37,6 +52,10 @@ def print_spinner(f, rate=30000, force=0):
        sys.stdout.write(' '*(mlen+10) +'\r')
        sys.stdout.flush()
 
+#------------------------------------------------------------------------------
+#
+#  Parsing
+#
 #------------------------------------------------------------------------------
 
 code     = 0 # normal code
@@ -72,7 +91,6 @@ def process(file, ch, line):
 
     global state, indent, stack, blocks
     top = stack[-1] if stack else None
-
     # start of block
     if ch == '{' and state == code:
        indent += 1
@@ -86,11 +104,10 @@ def process(file, ch, line):
     if ch == '}' and state == code:
        indent -= 1
        if not stack:
-          print('[!]', file) # error
+          print('[!]', file, line) # error
           return False
        b = stack.pop()
        b.range[1] = line
-
     #end
 
     print_spinner(file)
@@ -100,27 +117,6 @@ def process(file, ch, line):
     return True;
 
 #end
-
-import argparse
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--min-block-size', default=1000, type=int)
-parser.add_argument('--max-block-diff', default=500, type=int)
-parser.add_argument('--similarity', default=0.8, type=float)
-parser.add_argument('--diff-width', default=180, type=int)
-parser.add_argument('--no-cleanup', action='store_true')
-parser.add_argument('--all-levels', action='store_true')
-parser.add_argument('--all-files', action='store_true')
-parser.add_argument('-o')
-
-args, inputs = parser.parse_known_args()
-
-
-#------------------------------------------------------------------------------
-#
-#  Parsing
-#
-#------------------------------------------------------------------------------
 
 for fn in inputs:
 
@@ -138,12 +134,9 @@ for fn in inputs:
       if ch == '\n': line += 1
 
       if state == code:
-         if ch == '#':
-            state = macro
-         if ch == '"':
-            state = string1
-         if ch == "'":
-            state = string2
+         if ch == '#': state = macro
+         if ch == '"': state = string1
+         if ch == "'": state = string2
          if ch == '/':
             if not process(fn, ch, line): break
 
@@ -151,33 +144,20 @@ for fn in inputs:
             if not ch: break
             if ch == '\n': line += 1
 
-            if ch == '/':
-               state = comment1
-            if ch == '*':
-               state = comment2
+            if ch == '/': state = comment1
+            if ch == '*': state = comment2
 
       elif state == string1:
-         if ch == '"':
-            state = code
+         if ch == '"': state = code
 
       elif state == string2:
-         if ch == "'":
-            state = code
+         if ch == "'": state = code
 
       elif state == comment1 or state == macro:
-         if ch == '\n' and pch != '\\':
-            state = code
+         if ch == '\n' and pch != '\\': state = code
 
       elif state == comment2:
-         if ch == '*':
-            if not process(fn, ch, line): break
-
-            ch = f.read(1)
-            if not ch: break
-            if ch == '\n': line += 1
-
-            if ch == '/':
-               state = code
+         if ch == '/' and pch == '*': state = code
       #end
 
       if not process(fn, ch, line): break
@@ -186,7 +166,7 @@ for fn in inputs:
 
    #end
 
-  if indent: indent = 0 # warning
+  if indent: indent = 0
 
 #end
 
