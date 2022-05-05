@@ -3,11 +3,9 @@ import io, os, sys, time
 
 # TODO
 # - reduce parse errors
-# - line number inaccuracy
 # - collapsible sections?
-# - section links within document
+# - summary header?
 # - section links to source code (external)
-# - diff <small> <large> (instead of *)
 # - scrolling spinner bug
 #
 
@@ -134,7 +132,6 @@ for fn in inputs:
 
       ch = f.read(1)
       if not ch: break
-
       if ch == '\n': line += 1
 
       if state == code:
@@ -146,8 +143,11 @@ for fn in inputs:
             state = string2
          if ch == '/':
             if not process(fn, ch, line): break
+
             ch = f.read(1)
             if not ch: break
+            if ch == '\n': line += 1
+
             if ch == '/':
                state = comment1
             if ch == '*':
@@ -168,8 +168,11 @@ for fn in inputs:
       elif state == comment2:
          if ch == '*':
             if not process(fn, ch, line): break
+
             ch = f.read(1)
             if not ch: break
+            if ch == '\n': line += 1
+
             if ch == '/':
                state = code
       #end
@@ -243,20 +246,14 @@ def skip_unrelated_files(f1, f2):
     #end
 #end
 
-root = '/tmp/refactor-%d' % os.getpid()
 
-os.system('mkdir -p %s/diffs' % root)
-os.system('mkdir -p %s/files' % root)
-
-index = 1000
+similar = []
 
 L = len(blocks)
 
 for i in range(0, L-1):
 
    for j in range(i+1, L-1):
-
-      index += 1
 
       print_spinner('comparing blocks %4d - %4d' % (i,j), rate=200)
 
@@ -279,39 +276,26 @@ for i in range(0, L-1):
 
       # do the comparison (skip if blocks are not similar)
       sm = SM(None, bi.code, bj.code)
-      if sm.quick_ratio() < 0.8: continue
-      if sm.ratio() < 0.8: continue
+      if sm.quick_ratio() < args.similarity: continue
+      if sm.ratio() < args.similarity: continue
 
       # found similar blocks - add their children to the skip list
       skip_children(bi); skip_children(bj)
 
-      # save the blocks for post-processing
-      fstr = '%s/files/%d-%s-%d-%d'
-      bi_args = (root, index, dash(bi.file), bi.range[0], bi.range[1])
-      bj_args = (root, index, dash(bj.file), bj.range[0], bj.range[1])
-      with open(fstr % bi_args, 'w') as f: f.write(bi.code)
-      with open(fstr % bj_args, 'w') as f: f.write(bj.code)
+      # save the similar blocks for post-processing
+      similar += [(bi,bj)] if len(bj.code) > len(bi.code) else [(bj,bi)]
 
    #end
 
 #end
 
+similar = sorted(similar, key=lambda x: len(x[0].code), reverse=True)
 
 #------------------------------------------------------------------------------
 #
-#  Post-processing
+#  HTML formatting helpers
 #
 #------------------------------------------------------------------------------
-
-print_spinner('post processing')
-
-os.system("""
-ls -S %s/files/     \
-  | cut -d '-' -f1  \
-  | uniq | sort     \
-  | xargs -n1 -I {} \
-    sh -c 'diff -t -y --width=%d %s/files/{}* > %s/diffs/{}.diff'
-""" % (root, args.diff_width, root, root))
 
 VSP = '&#9474' # vertical separator
 GRN = '<span style="background:#ccffcc">'
@@ -322,7 +306,7 @@ ESP = '</span>'
 
 def esc(s): return s.replace('<', '&lt;')
 
-def diff2html(df, F1, R1, F2, R2):
+def diff2html(df, bi, bj, index):
 
     html = ""
     width = args.diff_width
@@ -330,22 +314,42 @@ def diff2html(df, F1, R1, F2, R2):
 
     DIV  = GRY + VSP + ESP
     DIV2 = YEL + VSP + ESP
+ 
+    # section links
+    html += '<pre style='
+    html += '"background:white;'
+    html += 'border:none;text-align:center">\n'
+    html += '<span '
+    html += 'id="%s"' % index
+    html += 'style="">'
+    if index == 1000:
+       html += ' <a href="#%s">next</a>' % (index + 1)
+       html += '</span>'
+       html += ' ' * (width - 4)
+    else:
+       html += ' <a href="#%s">next</a>' % (index + 1) 
+       html += ' <a href="#%s">prev</a>' % (index - 1)
+       html += ' <a href="#%s">up</a>' % (1000)
+       html += '</span>'
+       html += ' ' * (width - 12)
+    #end
 
+    html += '</pre>'
+
+    # section file headers
     html += '<pre style='
     html += '"background:white;'
     html += 'border:none;text-align:center">'
     html += '<span style="border:1px #ccc solid;'
-    html += 'border-radius:5px;padding:5px;font-weight:bold">'
-
-    H1 = ' %s (%s)' % (F1, R1)
-    H2 = ' %s (%s)' % (F2, R2)
-
-    html += ( H1 + ' '*(middle-len(H1)-1) )
+    html += 'border-radius:3px;padding:5px;font-weight:bold">'
+    H1 = ' %s:%d' % (bi.file, bi.range[0])
+    H2 = ' %s:%d' % (bj.file, bj.range[0])
+    html += ( H1 + ' '*((middle-1)-len(H1)))
     html += VSP
-    html += ( H2 + ' '*(middle-len(H1)) )
-
+    html += ( H2 + ' '*(middle-len(H2)) )
     html += '</span></pre>\n'
 
+    # diff
     html += '<pre style='
     html += '"background:white;'
     html += 'border:none;text-align:center">\n'
@@ -397,49 +401,55 @@ def diff2html(df, F1, R1, F2, R2):
 
     #end
 
-    html += '</pre><br>\n'
+    html += '</pre>\n'
 
     return html
 
 #end
 
-import glob
+#------------------------------------------------------------------------------
+#
+#  Post processing
+#
+#------------------------------------------------------------------------------
 
-files = glob.glob('%s/files/*' % root)
+print_spinner('post processing')
 
-for file in glob.glob('%s/diffs/*.diff' % root): # sort by size
+DN = '2>/dev/null'
+root = '/tmp/refactor-%d' % os.getpid()
+os.system('mkdir -p %s/diffs' % root)
+os.system('mkdir -p %s/files' % root)
 
-    tag = file.split('/')[-1].split('.')[0]
-    ftag = [ f for f in files if ('files/%s' % tag) in f ]
-    ftag = [ f.replace('%s/files/' % root, '') for f in ftag ]
-    ftag = [ f.replace('%s-'% tag, '') for f in ftag]
+index = 1000
 
-    f = ftag[0]
-    d = f[:f.rfind('-')].rfind('-')
-    r = f[d+1:]
-    f = f[:d]
-    f = [ i for i in inputs if dash(i) in f ][0]
-    F1 = f; R1 = r
+for (bi, bj) in similar:
 
-    f = ftag[1]
-    d = f[:f.rfind('-')].rfind('-')
-    r = f[d+1:]
-    f = f[:d]
-    f = [ i for i in inputs if dash(i) in f ][0]
-    F2 = f; R2 = r
+    fstr = '%s/files/%d-%s-%d-%d'
+    farg = (root, index, dash(bi.file), bi.range[0], bi.range[1])
+    bifn = fstr % farg
+    farg = (root, index, dash(bj.file), bj.range[0], bj.range[1])
+    bjfn = fstr % farg
+    with open(bifn, 'w') as f: f.write(bi.code)
+    with open(bjfn, 'w') as f: f.write(bj.code)
 
-    with open(file, 'r') as f: html = diff2html(f, F1, R1, F2, R2)
-    file = file.replace('.diff', '.html')
-    with open(file, 'w') as f: f.write(html)
+    dif = '%s/diffs/%d.diff' % (root, index)
+    cmd = 'diff -t -y --width=%d %s %s > %s'
+    cmd = cmd % (args.diff_width, bifn, bjfn, dif)
+    os.system(cmd)
+
+    htf = dif.replace('.diff', '.html')
+    with open(dif, 'r') as f: html = diff2html(f, bi, bj, index)
+    with open(htf, 'w') as f: f.write(html)
+
+    index += 1
 
 #end
 
-
 print_spinner('', force=1)
 
-DN = '2>/dev/null'
-os.system('echo $(ls %s/d*/*.*ml %s | wc -l) similar' % (root, DN))
-os.system('ls -S %s/d*/*.*ml %s | xargs cat > ~/diffs.html ' % (root, DN))
+print(len(similar), 'similar')
+
+os.system('ls %s/d*/*.*ml %s | xargs cat > ~/diffs.html ' % (root, DN))
 
 if not args.no_cleanup: os.system('sudo rm -rf %s' % root)
 
