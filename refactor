@@ -12,6 +12,7 @@ import io, os, sys, time
 
 from difflib import SequenceMatcher as SM
 from difflib import ndiff as ndiff
+
 #------------------------------------------------------------------------------
 
 import argparse
@@ -104,7 +105,7 @@ def process(file, ch, line):
     if ch == '}' and state == code:
        indent -= 1
        if not stack:
-          print('[!]', file, line) # error
+          print('[!] %s:%d' % (file, line)) # error
           return False
        b = stack.pop()
        b.range[1] = line
