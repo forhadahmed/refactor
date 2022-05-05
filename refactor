@@ -7,6 +7,7 @@ import io, os, sys, time
 # - summary header?
 # - section links to source code (external)
 # - scrolling spinner bug
+# - pygments
 #
 
 from difflib import SequenceMatcher as SM
@@ -110,8 +111,10 @@ parser.add_argument('--diff-width', default=180, type=int)
 parser.add_argument('--no-cleanup', action='store_true')
 parser.add_argument('--all-levels', action='store_true')
 parser.add_argument('--all-files', action='store_true')
+parser.add_argument('-o')
 
 args, inputs = parser.parse_known_args()
+
 
 #------------------------------------------------------------------------------
 #
@@ -447,10 +450,14 @@ for (bi, bj) in similar:
 
 print_spinner('', force=1)
 
-print(len(similar), 'similar')
+print(len(similar), 'similar blocks found')
 
-os.system('ls %s/d*/*.*ml %s | xargs cat > ~/diffs.html ' % (root, DN))
+outfile = ('refactor-%d.html' % os.getpid()) if not args.o else args.o
 
-if not args.no_cleanup: os.system('sudo rm -rf %s' % root)
+os.system('cat %s/d*/*.*ml > %s %s ' % (root, outfile, DN))
+
+print('>', outfile)
+
+if not args.no_cleanup: os.system('rm -rf %s' % root)
 
 
