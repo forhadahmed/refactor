@@ -16,5 +16,12 @@ This tool scans the input source files and extracts large blocks of code that ap
 
 # Usage
 
-SftHoFlowTableMgrSm.tin#234-234,556-345 (~1000 LOC)
-SftAgent.tin#234-234,556-345            ( ~230 LOC) 
+```
+refactor <files>
+```
+```
+refactor linux/include/*.h
+```
+
+![image](https://user-images.githubusercontent.com/2707770/166866061-813dc145-f263-4477-9e88-bbc7a98d1df6.png)
+
