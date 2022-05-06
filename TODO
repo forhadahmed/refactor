@@ -1,5 +1,6 @@
 * parsing support for indent-based languages (python)
 * reduce parse errors
+* block grouping based on filenames
 * scrolling spinner bug
 * html report
   - pygments to colorize diffs
