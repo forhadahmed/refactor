@@ -63,7 +63,7 @@ comment2 = 5 # /* comment */
 state  = code
 indent = 0
 stack  = []
-BLOCKS = []
+blocks = []
 
 class block:
    def __init__(self, file, line, indent, parent):
@@ -84,7 +84,7 @@ class block:
 
 def process(file, ch, line):
 
-    global state, indent, stack, BLOCKS
+    global state, indent, stack, blocks
 
     if args.d:
        print(file, '%5d' % line, state, end='')
@@ -99,7 +99,7 @@ def process(file, ch, line):
        b = block(file, line, indent, top)
        if top: top.children.append(b)
        stack.append(b)
-       BLOCKS.append(b)
+       blocks.append(b)
     #end
 
     # end of block
@@ -181,20 +181,20 @@ for fn in inputs:
 #------------------------------------------------------------------------------
 
 # filter out small blocks
-BLOCKS = [ b for b in BLOCKS if len(b.code) > args.min_block_size ]
+blocks = [ b for b in blocks if len(b.code) > args.min_block_size ]
 
-BLOCKS = sorted(BLOCKS, key=lambda x: len(x.code), reverse=True)
+blocks = sorted(blocks, key=lambda x: len(x.code), reverse=True)
 
-GROUPS = {0:[]}
+groups = {0:[]}
 
-for b in BLOCKS:
+for b in blocks:
     b.code = ''.join(b.code)
     bf = b.file
-    GROUPS[0] += [b] # global group
-    if bf in GROUPS:
-       GROUPS[bf] += [b]
+    groups[0] += [b] # global group
+    if bf in groups:
+       groups[bf] += [b]
     else:
-       GROUPS[bf] = [b]
+       groups[bf] = [b]
     #end
 #end
 
@@ -203,8 +203,8 @@ skip = []
 def skip_children(b):
     global skip
     for ch in b.children:
-      if ch in BLOCKS:
-        skip += [BLOCKS.index(ch)]
+      if ch in blocks:
+        skip += [blocks.index(ch)]
         skip_children(ch)
     #end
 #end
@@ -245,9 +245,9 @@ keys = {0} # use the global block list for now
 
 for k in keys:
 
-   blocks = GROUPS[k]
+   blks = groups[k]
 
-   L = len(blocks)
+   L = len(blks)
 
    for i in range(0, L):
 
@@ -258,7 +258,7 @@ for k in keys:
          # skip if either block is a child of matched block
          if i in skip or j in skip: continue
 
-         bi = blocks[i]; bj = blocks[j]
+         bi = blks[i]; bj = blks[j]
 
          # skip if filenames are unrelated
          if skip_unrelated_files(bi.file, bj.file): continue
