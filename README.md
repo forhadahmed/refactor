@@ -62,7 +62,7 @@ The output of the tool is an HTML report containing the similar blocks found (wi
 
 
 | Description  | Github Link | `refactor` output |
-| ------------- | ------------- | -----
+| :-- | :-- | :--
 | [Linux Kernel Ethernet Drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet)  | [torvalds/linux](https://github.com/torvalds/linux) | [drivers.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/drivers.html) (~400 similar blocks) |
 | C++ JSON Library | [nlohmann/json](https://github.com/nlohmann/json) | [json.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/json.html) (~350 similar blocks) |
 | Bitcoin/Dogecoin `--all-files` | [bitcoin/bitcoin](https://github.com/bitcoin/bitcoin) [dogecoin/dogecoin](https://github.com/dogecoin/dogecoin) |  [crypto.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/crypto.html) (~270 similar blocks) |               
