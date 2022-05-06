@@ -25,9 +25,13 @@ parser.add_argument('--diff-width', default=180, type=int)
 parser.add_argument('--no-cleanup', action='store_true')
 parser.add_argument('--all-levels', action='store_true')
 parser.add_argument('--all-files', action='store_true')
-parser.add_argument('-o')
+parser.add_argument('-o', '--output')
 
 args, inputs = parser.parse_known_args()
+
+if not inputs:
+   parser.print_usage()
+   sys.exit(0)
 
 #------------------------------------------------------------------------------
 #
@@ -429,9 +433,13 @@ for (bi, bj) in similar:
 
 print_spinner('', force=1)
 
-print(len(similar), 'similar blocks found')
+nsimilar = len(similar)
 
-outfile = ('refactor-%d.html' % os.getpid()) if not args.o else args.o
+print(nsimilar, 'similar blocks found')
+
+if not nsimilar: sys.exit(0)
+
+outfile = ('refactor-%d.html' % os.getpid()) if not args.output else args.output
 
 os.system('cat %s/d*/*.*ml > %s %s ' % (root, outfile, DN))
 
