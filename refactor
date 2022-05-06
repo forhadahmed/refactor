@@ -205,10 +205,6 @@ def ancestor(a, b):
     return 0
 #end
 
-def dash(fname):
-    if fname[0] == '/': fname = fname[1:]
-    return fname.replace('/', '-')
-
 fcache = {}
 
 # return true to skip block comparison based on filenames
@@ -403,6 +399,8 @@ DN = '2>/dev/null'
 root = '/tmp/refactor-%d' % os.getpid()
 os.system('mkdir -p %s/diffs' % root)
 os.system('mkdir -p %s/files' % root)
+
+def dash(fname): fname.replace('/', '-')
 
 index = 1000
 
