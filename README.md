@@ -58,7 +58,7 @@ The output of the tool is an HTML report containing the similar blocks found (wi
 
   This option enables comparisons across all files (more time consuming)
 
-# Example Runs
+# Examples
 
 
 | Description  | Github Link | `refactor` output |
