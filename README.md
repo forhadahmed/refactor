@@ -36,7 +36,7 @@ refactor [options] [files]
 ![usage](https://user-images.githubusercontent.com/2707770/167070282-9bbf69dd-1fe9-4a98-a8bd-4cccf8ce9def.gif)
  
 
-The output of the tool is an HTML report containing all of the similar blocks (with side-by-side diffs):
+The output of the tool is an HTML report containing the similar blocks found (with side-by-side diffs):
 
 ![image](https://user-images.githubusercontent.com/2707770/167007824-937948cc-ece8-4c5d-a5b4-7580999e4a53.png)
 
