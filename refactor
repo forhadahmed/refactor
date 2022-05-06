@@ -317,7 +317,7 @@ def diff2html(df, bi, bj, index):
  
     # section links
     html += '<pre style='
-    html += '"background:white;'
+    html += '"background:white;cursor:none;'
     html += 'border:none;text-align:center">\n'
     html += '<span '
     html += 'id="%s"' % index
@@ -338,7 +338,7 @@ def diff2html(df, bi, bj, index):
 
     # section file headers
     html += '<pre style='
-    html += '"background:white;'
+    html += '"background:white;cursor:none;'
     html += 'border:none;text-align:center">'
     html += '<span style="border:1px #ccc solid;'
     html += 'border-radius:3px;padding:5px;font-weight:bold">'
@@ -351,7 +351,7 @@ def diff2html(df, bi, bj, index):
 
     # diff
     html += '<pre style='
-    html += '"background:white;'
+    html += '"background:white;cursor:none;'
     html += 'border:none;text-align:center">\n'
 
     for line in df:
