@@ -180,7 +180,7 @@ for fn in inputs:
 #
 #------------------------------------------------------------------------------
 
-# filter out small BLOCKS
+# filter out small blocks
 BLOCKS = [ b for b in BLOCKS if len(b.code) > args.min_block_size ]
 
 BLOCKS = sorted(BLOCKS, key=lambda x: len(x.code), reverse=True)
@@ -241,7 +241,7 @@ def skip_unrelated_files(f1, f2):
 
 similar = []
 
-keys = {0} if args.all_files else GROUPS.keys() - {0}
+keys = {0} # use the global block list for now
 
 for k in keys:
 
