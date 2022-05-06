@@ -1,0 +1,9 @@
+* parsing support for indent-based languages (python)
+* reduce parse errors
+* scrolling spinner bug
+* html report
+  - pygments to colorize diffs
+  - collapsible sections?
+  - summary header?
+  - links to source code (external)
+  
