@@ -3,7 +3,7 @@
 `refactor` is a tool that analyzes source files (C/C++ currently) and identifies blocks of code that appear to be similar.  
 
 The intended uscases are:
-- refactoring similar blocks of code into common functions or templates *(not a part of this tool)*
+- refactoring similar blocks of code into common functions/templates *(not a part of this tool)*
 - finding unintentional mismatches as a result of copy/pasting (and only partially updating) code  
 
 # Implementation
@@ -16,7 +16,7 @@ Blocks are heirarchical:
 
 ![image](https://user-images.githubusercontent.com/2707770/167050904-dd0a1abc-c094-453b-9991-88a63c54e37e.png)
 
-This tool parses all blocks from source files and does a pair-wise comparison among all blocks for "similarity".  This is computed using python's [SequenceMatcher](https://docs.python.org/3/library/difflib.html#sequencematcher-examples) implementation.  A pair of blocks that have a [ratio()](https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher.ratio) above a certain threshold are considered "similar".
+This tool parses all blocks from source files and does a pair-wise comparison among all blocks for "similarity".  This is computed using python's [SequenceMatcher](https://docs.python.org/3/library/difflib.html#sequencematcher-examples) implementation.  A pair of blocks that have a [ratio()](https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher.ratio) above a certain threshold are considered "similar" (default=0.8).
 
 The largest blocks are compared first.  If two blocks are found to be similar, their children are discarded from further comparisons. For example, in the above diagram, if block `#1` is found to be similar to another block (not shown), then blocks `#3`, `#4`, `#5` (subtree for block `#1`) whould not be compared with any other blocks.  Block `#2` sould still be eligible for comparison.   
 
