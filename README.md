@@ -17,7 +17,7 @@ This tool parses all blocks from source files and does a pair-wise comparison am
 The largest blocks are compared first.  If two blocks are found to be similar, their children are discarded from further comparisons. For example, in the above diagram, if block `#1` is found to be similar to another block (not shown), then blocks `#3`, `#4`, `#5` (subtree for block `#1`) whould not be compared with any other blocks.  Block `#2` sould still be eligible for comparison.   
 
 For large input file sets, there can be thousands of code blocks to compare - from small 2-3 liner blocks to large function bodies.  Smaller blocks are typically discarded for comparison which cuts down the processing time:
-- default minimum block size filter is used which discards many smaller blocks from processing
+- a default minimum block size filter is used which discards many smaller blocks from processing
 - two larger blocks found to be similar discards their subtrees (of smaller blocks) from processing
 
 
