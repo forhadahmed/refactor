@@ -1,5 +1,3 @@
-TODO
-
 * parsing support for indent-based languages (python)
 * reduce parse errors
 * scrolling spinner bug
