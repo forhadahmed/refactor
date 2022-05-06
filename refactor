@@ -16,13 +16,13 @@ parser.add_argument('--diff-width', default=180, type=int)
 parser.add_argument('--no-cleanup', action='store_true')
 parser.add_argument('--all-levels', action='store_true')
 parser.add_argument('--all-files', action='store_true')
+parser.add_argument('-d', action='store_true')
 parser.add_argument('-o', '--output')
+
 
 args, inputs = parser.parse_known_args()
 
-if not inputs:
-   parser.print_usage()
-   sys.exit(0)
+if not inputs: inputs = sys.stdin.read().split('\n')
 
 #------------------------------------------------------------------------------
 #
@@ -39,13 +39,12 @@ spinner = spinning_cursor()
 mlen = 0
 sidx = 0
 
-def print_spinner(f, rate=30000, force=0):
-    global mlen,sidx
+def print_spinner(s, rate=30000, force=0):
+    global mlen, sidx
     sidx += 1
     if not (sidx % rate) or force:
-       sys.stdout.write(next(spinner) + ' ' + f)
-       sys.stdout.flush()
-       sys.stdout.write(' '*(mlen+10) +'\r')
+       sys.stdout.write(next(spinner) + ' ' + s )
+       sys.stdout.write(' '*(mlen-len(s)+20) + '\r')
        sys.stdout.flush()
 
 #------------------------------------------------------------------------------
@@ -64,7 +63,7 @@ comment2 = 5 # /* comment */
 state  = code
 indent = 0
 stack  = []
-blocks = []
+BLOCKS = []
 
 class block:
    def __init__(self, file, line, indent, parent):
@@ -85,7 +84,14 @@ class block:
 
 def process(file, ch, line):
 
-    global state, indent, stack, blocks
+    global state, indent, stack, BLOCKS
+
+    if args.d:
+       print(file, '%5d' % line, state, end='')
+       print('  ' if ch.isspace() else ' %s' % ch, end='')
+       print('[%s]' % ('*' * len(stack)))
+    #end
+
     top = stack[-1] if stack else None
     # start of block
     if ch == '{' and state == code:
@@ -93,7 +99,7 @@ def process(file, ch, line):
        b = block(file, line, indent, top)
        if top: top.children.append(b)
        stack.append(b)
-       blocks.append(b)
+       BLOCKS.append(b)
     #end
 
     # end of block
@@ -117,7 +123,11 @@ def process(file, ch, line):
 for fn in inputs:
 
   line = 1
+  state = code
+  indent = 0
   mlen = max(len(fn), mlen)
+
+  if not os.path.isfile(fn): continue
 
   with open(fn) as f:
 
@@ -162,10 +172,7 @@ for fn in inputs:
 
    #end
 
-  if indent: indent = 0
-
 #end
-
 
 #------------------------------------------------------------------------------
 #
@@ -173,20 +180,31 @@ for fn in inputs:
 #
 #------------------------------------------------------------------------------
 
-# filter out small blocks
-blocks = [ b for b in blocks if len(b.code) > args.min_block_size ]
+# filter out small BLOCKS
+BLOCKS = [ b for b in BLOCKS if len(b.code) > args.min_block_size ]
 
-blocks = sorted(blocks, key=lambda x: len(x.code), reverse=True)
+BLOCKS = sorted(BLOCKS, key=lambda x: len(x.code), reverse=True)
 
-for b in blocks: b.code = ''.join(b.code)
+GROUPS = {0:[]}
+
+for b in BLOCKS:
+    b.code = ''.join(b.code)
+    bf = b.file
+    GROUPS[0] += [b] # global group
+    if bf in GROUPS:
+       GROUPS[bf] += [b]
+    else:
+       GROUPS[bf] = [b]
+    #end
+#end
 
 skip = []
 
 def skip_children(b):
     global skip
     for ch in b.children:
-      if ch in blocks:
-        skip += [blocks.index(ch)]
+      if ch in BLOCKS:
+        skip += [BLOCKS.index(ch)]
         skip_children(ch)
     #end
 #end
@@ -221,44 +239,51 @@ def skip_unrelated_files(f1, f2):
     #end
 #end
 
-
 similar = []
 
-L = len(blocks)
+keys = {0} if args.all_files else GROUPS.keys() - {0}
 
-for i in range(0, L-1):
+for k in keys:
 
-   for j in range(i+1, L-1):
+   blocks = GROUPS[k]
 
-      print_spinner('comparing blocks %4d - %4d' % (i,j), rate=200)
+   L = len(blocks)
 
-      # skip if either block is a child of matched block
-      if i in skip or j in skip: continue
+   for i in range(0, L):
 
-      bi = blocks[i]; bj = blocks[j]
+      for j in range(i+1, L):
 
-      # skip if filenames are unrelated
-      if skip_unrelated_files(bi.file, bj.file): continue
+         print_spinner('comparing blocks %4d - %4d %s' % (i,L,k), rate=500)
 
-      # skip if one block is a parent of another
-      if ancestor(bi, bj) or ancestor(bj, bi): continue
+         # skip if either block is a child of matched block
+         if i in skip or j in skip: continue
 
-      # skip if the length of code sections differs by a threshold
-      if abs(len(bi.code)-len(bj.code)) > args.max_block_diff: continue
+         bi = blocks[i]; bj = blocks[j]
 
-      # skip if blocks are not on the same level
-      if not args.all_levels and bi.indent != bj.indent: continue
+         # skip if filenames are unrelated
+         if skip_unrelated_files(bi.file, bj.file): continue
 
-      # do the comparison (skip if blocks are not similar)
-      sm = SM(None, bi.code, bj.code)
-      if sm.quick_ratio() < args.similarity: continue
-      if sm.ratio() < args.similarity: continue
+         # skip if one block is a parent of another
+         if ancestor(bi, bj) or ancestor(bj, bi): continue
 
-      # found similar blocks - add their children to the skip list
-      skip_children(bi); skip_children(bj)
+         # skip if the length of code sections differs by a threshold
+         if abs(len(bi.code)-len(bj.code)) > args.max_block_diff: continue
 
-      # save the similar blocks for post-processing
-      similar += [(bi,bj)] if len(bj.code) > len(bi.code) else [(bj,bi)]
+         # skip if blocks are not on the same level
+         if not args.all_levels and bi.indent != bj.indent: continue
+
+         # do the comparison (skip if blocks are not similar)
+         sm = SM(None, bi.code, bj.code)
+         if sm.quick_ratio() < args.similarity: continue
+         if sm.ratio()       < args.similarity: continue
+
+         # found similar blocks - add their children to the skip list
+         skip_children(bi); skip_children(bj)
+
+         # save the similar blocks for post-processing
+         similar += [(bi,bj)] if len(bj.code) > len(bi.code) else [(bj,bi)]
+
+      #end
 
    #end
 
@@ -430,11 +455,13 @@ print(nsimilar, 'similar blocks found')
 
 if not nsimilar: sys.exit(0)
 
-outfile = ('refactor-%d.html' % os.getpid()) if not args.output else args.output
+output = ('refactor-%d.html' % os.getpid())
 
-os.system('cat %s/d*/*.*ml > %s %s ' % (root, outfile, DN))
+if args.output: output = args.output
 
-print('>', outfile)
+cmd = 'cat %s/diffs/*.html > %s %s ' % (root, output, DN)
+os.system(cmd)
+print('>', output)
 
 if not args.no_cleanup: os.system('rm -rf %s' % root)
 
