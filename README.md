@@ -6,7 +6,7 @@ The intended uscases are:
 - refactoring similar blocks of code into common functions or templates *(not a part of this tool)*
 - finding unintentional mismatches as a result of copy/pasting (and only partially updating) code  
 
-# Identifying Similar Blocks
+# Implementation
 
 A block (or "scope") within a source file is code enclosed within braces: `{ ... }`.  
 
