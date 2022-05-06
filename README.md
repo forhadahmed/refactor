@@ -4,7 +4,7 @@
 
 The intended uscases are:
 - refactoring similar blocks of code into common functions or templates *(not a part of this tool)*
-- finding unintentional mismatches in similar blocks as a result of copy/pasting code 
+- finding unintentional mismatches as a result of copy/pasting (and only partially updating) code  
 
 # Identifying Similar Blocks
 
