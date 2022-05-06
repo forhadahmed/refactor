@@ -21,7 +21,7 @@ For large input file sets, there can be thousands of code blocks to compare - fr
 - two larger blocks found to be similar discards their subtrees (of smaller blocks) from processing
 
 
-More options are discussed in the [Options](#options) section that can further reduce the number of blocks processed by the tool.
+More is discussed in the [Options](#options) section that can further reduce the number of blocks processed by the tool.
 
 # Basic Usage
 
