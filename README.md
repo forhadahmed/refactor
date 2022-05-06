@@ -57,6 +57,7 @@ The output of the tool is an HTML report containing the similar blocks found (wi
    - `linux/net/ipv4/netlink.c` and `linux/net/ipv6/mcast.c` (blocks in these files are not eligible for comarison)
 
   This option enables comparisons across all files (more time consuming)
+- `-o/--output` HTML output file (by default, the tool produces `report-<pid>.html`)
 
 # Examples
 
