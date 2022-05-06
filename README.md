@@ -32,7 +32,13 @@ More is discussed in the [Options](#options) section that can further reduce the
 ```
 refactor [options] [files]
 ```
+
+```
+find [filter] | refactor [options]
+```
  
+Example: 
+
 ![usage](https://user-images.githubusercontent.com/2707770/167070282-9bbf69dd-1fe9-4a98-a8bd-4cccf8ce9def.gif)
  
 
