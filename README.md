@@ -32,7 +32,7 @@ More is discussed in the [Options](#options) section that can further reduce the
 ```
 refactor [options] [files]
 ```
-
+Or:
 ```
 find [filter] | refactor [options]
 ```
