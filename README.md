@@ -12,15 +12,16 @@ Blocks are heirarchical:
 
 ![image](https://user-images.githubusercontent.com/2707770/167048235-a321cad7-6831-4c40-9f41-385f0b7ce5fe.png)
 
-This tool scans the input source files and extracts large blocks of code that appear to be similar.  
+This tool parses all blocks from source files and does a pair-wise comparison among all blocks for "similarity".  This is computed using python's [SequenceMatcher](https://docs.python.org/3/library/difflib.html#sequencematcher-examples) implementation.  A pair of blocks that have a [ratio()](https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher.ratio) above a certain threshold are considered "similar".
+
+For large input file sets, there can be thousands of code blocks to compare - from small 2-3 liner blocks to large function bodies.  Smaller blocks are discarded for comparison which cuts down the processing time. More options are discussed in the [Usage](#usage) section that can further reduce the number of blocks processed by the tool.
 
 # Usage
 
 ```
-refactor <files>
+refactor [options] [files]
 ```
-
-<a href="https://asciinema.org/a/5LhAJLx39kKRFO6xduFpmoJ9s" target="_blank"><img src="https://asciinema.org/a/5LhAJLx39kKRFO6xduFpmoJ9s.svg" /></a>
+The output of the tool is an HTML report containing all of the similar blocks (with side-by-side diffs):
 
 ![image](https://user-images.githubusercontent.com/2707770/167007824-937948cc-ece8-4c5d-a5b4-7580999e4a53.png)
 
