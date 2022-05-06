@@ -14,7 +14,7 @@ Blocks are heirarchical:
 
 This tool parses all blocks from source files and does a pair-wise comparison among all blocks for "similarity".  This is computed using python's [SequenceMatcher](https://docs.python.org/3/library/difflib.html#sequencematcher-examples) implementation.  A pair of blocks that have a [ratio()](https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher.ratio) above a certain threshold are considered "similar".
 
-For large input file sets, there can be thousands of code blocks to compare - from small 2-3 liner blocks to large function bodies.  Smaller blocks are discarded for comparison which cuts down the processing time. More options are discussed in the [Usage](#usage) section that can further reduce the number of blocks processed by the tool.
+For large input file sets, there can be thousands of code blocks to compare - from small 2-3 liner blocks to large function bodies.  Smaller blocks are discarded for comparison which cuts down the processing time. More options are discussed in the [Usage](#usage) section (fiters for block size, block hierarchy, etc) that can further reduce the number of blocks processed by the tool.
 
 # Usage
 
