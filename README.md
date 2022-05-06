@@ -54,6 +54,6 @@ The output of the tool is an HTML report containing the similar blocks found (wi
 
 | Description  | Github Link | `refactor` output |
 | ------------- | ------------- | -----
-| [Linux Kernel Ethernet Drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet)  | https://github.com/torvalds/linux | [linux-drivers-ethernet.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/linux-drivers-ethernet.html)  |
+| [Linux Kernel Ethernet Drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet)  | https://github.com/torvalds/linux | [drivers.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/drivers.html)  |
 | Dear ImGUI: Popular C++ GUI Library  | https://github.com/ocornut/imgui |  [imgui.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/imgui.html) |
 | C++ JSON Library |https://github.com/nlohmann/json| [json.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/json.html) |
