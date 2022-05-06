@@ -10,7 +10,7 @@ Blocks are heirarchical:
 - a block can have multiple "child" block/scopes 
 - a block is part of a parent block/scope (unless it is the top-level scope of the file)
 
-![image](https://user-images.githubusercontent.com/2707770/167048235-a321cad7-6831-4c40-9f41-385f0b7ce5fe.png)
+![image](https://user-images.githubusercontent.com/2707770/167050904-dd0a1abc-c094-453b-9991-88a63c54e37e.png)
 
 This tool parses all blocks from source files and does a pair-wise comparison among all blocks for "similarity".  This is computed using python's [SequenceMatcher](https://docs.python.org/3/library/difflib.html#sequencematcher-examples) implementation.  A pair of blocks that have a [ratio()](https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher.ratio) above a certain threshold are considered "similar".
 
