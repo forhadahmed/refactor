@@ -131,6 +131,8 @@ for fn in inputs:
 
   with open(fn) as f:
 
+   try:
+
     ch = 0; pch = 0
 
     while 1:
@@ -170,7 +172,12 @@ for fn in inputs:
 
       pch = ch
 
-   #end
+    #end
+
+   except KeyboardInterrupt:
+      sys.exit(1)
+   else:
+      pass
 
 #end
 
