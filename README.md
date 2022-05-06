@@ -49,3 +49,11 @@ The output of the tool is an HTML report containing the similar blocks found (wi
 # Options
 
 [wip]
+
+# Example Runs
+
+| Description  | Github Link | `refactor` output |
+| ------------- | ------------- | -----
+| [Linux Kernel Ethernet Drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet)  | https://github.com/torvalds/linux | d  |
+| Dear ImGUI: Popular C++ GUI Library  | https://github.com/ocornut/imgui |  d |
+| C++ JSON Library |https://github.com/nlohmann/json| d |
