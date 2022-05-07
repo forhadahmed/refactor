@@ -29,6 +29,8 @@ More is discussed in the [Options](#options) section that can further reduce the
 
 # Basic Usage
 
+The `refactor` script from this repository should be downloaded (no external dependencies) and installed in `$PATH`. To Run:  
+
 ```
 refactor [options] [files]
 ```
