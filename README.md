@@ -75,6 +75,5 @@ Some random example runs from large (and popular) repositories on GitHub.
 | Dear ImGUI: C++ GUI Library  | [ocornut/imgui](https://github.com/ocornut/imgui) |  [imgui.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/imgui.html) (~30 similar blocks) |
 
 
-Interesting find: [dogecoin](https://github.com/dogecoin/dogecoin) could use some major refactoring since its basically a fork of [bitcoin](https://github.com/bitcoin/bitcoin) with minor tweaks! 
-A common library would clean things up quite a bit...  
+Interesting find: [dogecoin](https://github.com/dogecoin/dogecoin) and [bitcoin](https://github.com/bitcoin/bitcoin) could use some major refactoring since the latter is a fork with some tweaks! A common library would clean things up quite a bit...  
 
