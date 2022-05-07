@@ -1,6 +1,6 @@
 # Introduction
 
-`refactor` is a tool that analyzes source files (C/C++ currently) and identifies blocks of code that appear to be similar.  
+`refactor` is a tool that analyzes source files ("curly-bracket" languages: C/C++/JS/Java/Go/etc...) and identifies blocks of code that appear to be similar.  
 
 The intended uscases are:
 - refactoring similar blocks of code into common functions/templates *(not a part of this tool)*
@@ -8,7 +8,7 @@ The intended uscases are:
 
 # Implementation
 
-A block (or "scope") within a source file is code enclosed within braces: `{ ... }`.  
+A block (or "scope") within a source file is code enclosed within brackets: `{ ... }`.  
 
 Blocks are heirarchical:
 - a block can have multiple "child" block/scopes 
