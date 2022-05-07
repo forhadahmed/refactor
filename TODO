@@ -1,5 +1,7 @@
 * parsing support for indent-based languages (python)
 * reduce parse errors
+  - java parse errors (not debugged)
+  - c/c++ parse errors: #if blocks with unmatched {/}
 * block grouping based on filenames
 * html report
   - pygments to colorize diffs

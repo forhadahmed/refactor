@@ -191,7 +191,7 @@ for fn in inputs:
    except UnicodeDecodeError:
       pass
 
-  if indent or stack: pass # error
+  if indent or stack: print('[!] %s:%d' % (fn, line)) # error
 
 #end
 
