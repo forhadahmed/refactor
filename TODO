@@ -3,6 +3,7 @@
   - java parse errors (not debugged)
   - c/c++ parse errors: #if blocks with unmatched {/}
 * block grouping based on filenames
+* terminal colorized diff output
 * html report
   - pygments to colorize diffs
   - collapsible sections?
