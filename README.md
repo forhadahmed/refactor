@@ -18,7 +18,7 @@ Blocks are heirarchical:
 
 This tool parses all blocks from source files and does a pair-wise comparison among all blocks for "similarity".  This is computed using python's [SequenceMatcher](https://docs.python.org/3/library/difflib.html#sequencematcher-examples) implementation.  A pair of blocks that have a [ratio()](https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher.ratio) above a certain threshold are considered "similar" (default=0.8).
 
-The largest blocks are compared first.  If two blocks are found to be similar, their children are discarded from further comparisons. For example, in the above diagram, if block `#1` is found to be similar to another block (not shown), then blocks `#3`, `#4`, `#5` (subtree for block `#1`) whould not be compared with any other blocks.  Block `#2` sould still be eligible for comparison.   
+The largest blocks are compared first.  If two blocks are found to be similar, their children are discarded from further comparisons. For example, in the above diagram, if block `#1` is found to be similar to another block (not shown), then blocks `#3`, `#4`, `#5` (subtree for block `#1`) would not be compared with any other blocks.  Block `#2` sould still be eligible for comparison.   
 
 For large input file sets, there can be thousands of code blocks to compare - from small 2-3 liner blocks to large function bodies.  Smaller blocks are typically discarded for comparison which cuts down the processing time:
 - a default minimum block size filter is used which discards many smaller blocks from processing
@@ -52,7 +52,7 @@ The output of the tool is an [HTML report](#examples) containing the similar blo
 
 - `--min-block-size` Minimum block size/length in characters (default=1000).  Blocks that are smaller than this threshold are not considered for comparison against any other block
 - `--max-block-diff` Maximum length diff between two blocks in characters (default=500).  Two blocks that differ in length more than this amount are not considered for comparison against each other.  For example, a block of length 2000 chars and another block of length 3000 chars will not be compared for similarity by default (a length difference that large means they have no chance of being similar)
-- `--all-levels` By default, only blocks in the *same level* of hierarchy are considered for comparison.  For example, in the [Implementation](#implementation) section, blocks `#1`/`#2` can be compared and blocks `#3`/`#4` can be compared.  Blocks `#2`/`#3` *cannot* be compared by default. This option enables comparisons across different levels of the tree (more time consuming)
+- `--all-levels` By default, only blocks in the *same level* of hierarchy are considered for comparison.  For example, in the [Implementation](#implementation) section, blocks `#1`/`#2` are compared and blocks `#3`/`#4` are compared.  Blocks `#2`/`#3` *are not* compared by default. This option enables comparisons across different levels of the tree (more time consuming)
 - `--all-files` In most cases, similar blocks come either from one source file (two blocks within the same file have similar code) or from two source files that are similarly named (with small variations in the name). By default, this tool *does not* compare two blocks coming from two source files that are named very differently:  For example:
 
    - `linux/net/ipv4/udp.c` and `linux/net/ipv6/udp.c` (blocks in these files are eligible for comparison)
