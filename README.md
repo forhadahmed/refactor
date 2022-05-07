@@ -1,6 +1,6 @@
 # Introduction
 
-`refactor` is a tool that analyzes source files (C/C++ currently) and identifies blocks of code that appear to be similar.  
+`refactor` is a tool that analyzes source files ("curly-bracket" languages: C/C++/JS/Java/Go/etc...) and identifies blocks of code that appear to be similar.  
 
 The intended uscases are:
 - refactoring similar blocks of code into common functions/templates *(not a part of this tool)*
@@ -8,7 +8,7 @@ The intended uscases are:
 
 # Implementation
 
-A block (or "scope") within a source file is code enclosed within braces: `{ ... }`.  
+A block (or "scope") within a source file is code enclosed within brackets: `{ ... }`.  
 
 Blocks are heirarchical:
 - a block can have multiple "child" block/scopes 
@@ -29,6 +29,8 @@ More is discussed in the [Options](#options) section that can further reduce the
 
 # Basic Usage
 
+The `refactor` script from this repository should be downloaded (no external dependencies) and installed in `$PATH`. To Run:  
+
 ```
 refactor [options] [files]
 ```
@@ -48,13 +50,26 @@ The output of the tool is an HTML report containing the similar blocks found (wi
 
 # Options
 
-[wip]
+- `--min-block-size` Minimum block size/length in characters (default=1000).  Blocks that are smaller than this threshold are not considered for comparison against any other block
+- `--max-block-diff` Maximum length diff between two blocks in characters (default=500).  Two blocks that differ in length more than this amount are not considered for comparison against each other.  For example, a block of length 2000 chars and another block of length 3000 chars will not be compared for similarity by default (a length difference that large means they have no chance of being similar)
+- `--all-levels` By default, only blocks in the *same level* of hierarchy are considered for comparison.  For example, in the [Implementation](#implementation) section, blocks `#1`/`#2` can be compared and blocks `#3`/`#4` can be compared.  Blocks `#2`/`#3` *cannot* be compared by default. This option enables comparisons across different levels of the tree (more time consuming)
+- `--all-files` In most cases, similar blocks come either from one source file (two blocks within the same file have similar code) or from two source files that are similarly named (with small variations in the name). By default, this tool *does not* compare two blocks coming from two source files that are named very differently:  For example:
 
-# Example Runs
+   - `linux/net/ipv4/udp.c` and `linux/net/ipv6/udp.c` (blocks in these files are eligible for comparison)
+   - `linux/net/ipv4/netlink.c` and `linux/net/ipv6/mcast.c` (blocks in these files are not eligible for comarison)
+
+  This option enables comparisons across all files (more time consuming)
+- `-o/--output` HTML output file (by default, the tool produces `report-<pid>.html`)
+
+# Examples
+
 
 | Description  | Github Link | `refactor` output |
-| ------------- | ------------- | -----
-| [Linux Kernel Ethernet Drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet)  | https://github.com/torvalds/linux | [drivers.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/drivers.html) (~400 similar blocks) |
-| C++ JSON Library |https://github.com/nlohmann/json | [json.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/json.html) (~350 similar blocks) |
-| Dear ImGUI: C++ GUI Library  | https://github.com/ocornut/imgui |  [imgui.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/imgui.html) (~30 similar blocks) |
+| :-- | :-- | :--
+| [Linux Kernel Ethernet Drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet)  | [torvalds/linux](https://github.com/torvalds/linux) | [drivers.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/drivers.html) (~400 similar blocks) |
+| C++ JSON Library | [nlohmann/json](https://github.com/nlohmann/json) | [json.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/json.html) (~350 similar blocks) |
+| Bitcoin/Dogecoin `--all-files` | [bitcoin/bitcoin](https://github.com/bitcoin/bitcoin) [dogecoin/dogecoin](https://github.com/dogecoin/dogecoin) |  [crypto.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/crypto.html) (~270 similar blocks) |     
+| Go BGP Implementation | [osrg/gobgp](https://github.com/osrg/gobgp) |  [gobgp.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/gobgp.html) (~250 similar blocks) |
+| Google Protobuf Library  | [protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf) |  [protobuf.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/protobuf.html) (~215 similar blocks) |
+| Dear ImGUI: C++ GUI Library  | [ocornut/imgui](https://github.com/ocornut/imgui) |  [imgui.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/imgui.html) (~30 similar blocks) |
 
