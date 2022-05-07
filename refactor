@@ -14,12 +14,16 @@ parser.add_argument('--diff-width', default=180, type=int)
 parser.add_argument('--no-cleanup', action='store_true')
 parser.add_argument('--all-levels', action='store_true')
 parser.add_argument('--all-files', action='store_true')
+parser.add_argument('-n', default=0, type=int)
+parser.add_argument('-p', action='store_true')
 parser.add_argument('-d', action='store_true')
 parser.add_argument('-o', '--output')
 
 args, inputs = parser.parse_known_args()
 
 if not inputs: inputs = sys.stdin.read().split('\n')
+
+if args.n: inputs = inputs[:args.n]
 
 #------------------------------------------------------------------------------
 #
@@ -96,7 +100,7 @@ def process(file, ch, line):
     if args.d:
        print(file, '%5d' % line, state, end='')
        print('  ' if ch.isspace() else ' %s' % ch, end='')
-       print('[%s]' % ('*' * len(stack)))
+       print(' [%s]' % ('*' * len(stack)))
     #end
 
     top = stack[-1] if stack else None
@@ -131,6 +135,7 @@ for fn in inputs:
 
   line = 1
   state = code
+  stack = []
   indent = 0
   mlen = max(len(fn), mlen)
 
@@ -186,7 +191,11 @@ for fn in inputs:
    except UnicodeDecodeError:
       pass
 
+  if indent or stack: pass # error
+
 #end
+
+if args.p: sys.exit(0)
 
 #------------------------------------------------------------------------------
 #
