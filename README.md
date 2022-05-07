@@ -16,9 +16,11 @@ Blocks are heirarchical:
 
 ![image](https://user-images.githubusercontent.com/2707770/167050904-dd0a1abc-c094-453b-9991-88a63c54e37e.png)
 
-This tool parses all blocks from source files and does a pair-wise comparison among all blocks for "similarity".  This is computed using python's [SequenceMatcher](https://docs.python.org/3/library/difflib.html#sequencematcher-examples) implementation.  A pair of blocks that have a [ratio()](https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher.ratio) above a certain threshold are considered "similar" (default=0.8).
+This tool parses all blocks from source files and does a pair-wise comparison among blocks for "similarity".  This is computed using python's [SequenceMatcher](https://docs.python.org/3/library/difflib.html#sequencematcher-examples) implementation.  A pair of blocks that have a [ratio()](https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher.ratio) above a certain threshold are considered "similar" (default=0.8).
 
-The largest blocks are compared first.  If two blocks are found to be similar, their children are discarded from further comparisons. For example, in the above diagram, if block `#1` is found to be similar to another block (not shown), then blocks `#3`, `#4`, `#5` (subtree for block `#1`) would not be compared with any other blocks.  Block `#2` sould still be eligible for comparison.   
+The largest blocks are compared first.  A block that is a descendent of another block will not be compared with the parent block.  For example, in the above diagram, blocks `#1`/`#3` and `#1`/`#5` will not be compared.  
+
+Also, if two blocks are found to be similar, their children are discarded from further comparisons: if block `#1` is similar to another block (not shown), then blocks `#3`, `#4`, `#5` (subtree for block `#1`) will not be compared with any other blocks.  Block `#2` will still be eligible for comparison.   
 
 For large input file sets, there can be thousands of code blocks to compare - from small 2-3 liner blocks to large function bodies.  Smaller blocks are typically discarded for comparison which cuts down the processing time:
 - a default minimum block size filter is used which discards many smaller blocks from processing
