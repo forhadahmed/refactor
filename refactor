@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-import io, os, sys, time
+import io, os, sys, time, argparse
 
 from difflib import SequenceMatcher as SM
 from difflib import ndiff as ndiff
 
 #------------------------------------------------------------------------------
-
-import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--min-block-size', default=1000, type=int)
@@ -18,7 +16,6 @@ parser.add_argument('--all-levels', action='store_true')
 parser.add_argument('--all-files', action='store_true')
 parser.add_argument('-d', action='store_true')
 parser.add_argument('-o', '--output')
-
 
 args, inputs = parser.parse_known_args()
 
@@ -38,13 +35,23 @@ def spinning_cursor():
 spinner = spinning_cursor()
 mlen = 0
 sidx = 0
+cols = 0
+tty = 0
+
+if sys.stdout.isatty():
+   cols = os.get_terminal_size().columns-1
+   tty = 1
+#end
 
 def print_spinner(s, rate=30000, force=0):
+    if not tty: return
     global mlen, sidx
     sidx += 1
     if not (sidx % rate) or force:
-       sys.stdout.write(next(spinner) + ' ' + s )
-       sys.stdout.write(' '*(mlen-len(s)+20) + '\r')
+       s = ( next(spinner) + ' ' + s )
+       if len(s) > cols: s = s[:cols-4] + '...'
+       sys.stdout.write(s)
+       sys.stdout.write( ' ' * (cols - len(s)) + '\r')
        sys.stdout.flush()
 
 #------------------------------------------------------------------------------
@@ -176,7 +183,7 @@ for fn in inputs:
 
    except KeyboardInterrupt:
       sys.exit(1)
-   else:
+   except UnicodeDecodeError:
       pass
 
 #end
