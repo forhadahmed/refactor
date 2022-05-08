@@ -56,7 +56,7 @@ if sys.stdout.isatty():
    tty = 1
 #end
 
-def prints(s, rate=30000, force=0):
+def prints(s, rate=100000, force=0):
     if not tty: return
     global mlen, sidx
     sidx += 1
@@ -140,6 +140,62 @@ def process(file, ch, line):
 
 #end
 
+def process_file(f):
+
+    global state, line
+
+    try:
+
+      ch = 0; pch = 0
+
+      while 1:
+
+        ch = f.read(1)
+        if not ch: break
+        if ch == '\n': line += 1
+
+        if state == code:
+           if ch == '#': state = macro
+           if ch == '"': state = string1
+           if ch == "'": state = string2
+           if ch == '/':
+              if not process(fn, ch, line): break
+
+              ch = f.read(1)
+              if not ch: break
+              if ch == '\n': line += 1
+
+              if ch == '/': state = comment1
+              if ch == '*': state = comment2
+
+        elif state == string1:
+           if ch == '"': state = code
+
+        elif state == string2:
+           if ch == "'": state = code
+
+        elif state == comment1 or state == macro:
+           if ch == '\n' and pch != '\\': state = code
+
+        elif state == comment2:
+           if ch == '/' and pch == '*': state = code
+        #end
+
+        if not process(fn, ch, line): break
+
+        pch = ch
+
+      #end
+
+    except KeyboardInterrupt:
+       sys.exit(1)
+    except UnicodeDecodeError:
+       pass
+
+    if indent or stack: print('[!] %s:%d' % (fn, line)) # error
+
+#end
+
 for fn in inputs:
 
   line = 1
@@ -150,57 +206,7 @@ for fn in inputs:
 
   if not os.path.isfile(fn): continue
 
-  with open(fn) as f:
-
-   try:
-
-    ch = 0; pch = 0
-
-    while 1:
-
-      ch = f.read(1)
-      if not ch: break
-      if ch == '\n': line += 1
-
-      if state == code:
-         if ch == '#': state = macro
-         if ch == '"': state = string1
-         if ch == "'": state = string2
-         if ch == '/':
-            if not process(fn, ch, line): break
-
-            ch = f.read(1)
-            if not ch: break
-            if ch == '\n': line += 1
-
-            if ch == '/': state = comment1
-            if ch == '*': state = comment2
-
-      elif state == string1:
-         if ch == '"': state = code
-
-      elif state == string2:
-         if ch == "'": state = code
-
-      elif state == comment1 or state == macro:
-         if ch == '\n' and pch != '\\': state = code
-
-      elif state == comment2:
-         if ch == '/' and pch == '*': state = code
-      #end
-
-      if not process(fn, ch, line): break
-
-      pch = ch
-
-    #end
-
-   except KeyboardInterrupt:
-      sys.exit(1)
-   except UnicodeDecodeError:
-      pass
-
-  if indent or stack: print('[!] %s:%d' % (fn, line)) # error
+  with open(fn) as f: process_file(f)
 
 #end
 
