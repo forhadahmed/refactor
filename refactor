@@ -7,23 +7,32 @@ from difflib import ndiff as ndiff
 #------------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--min-block-size', default=1000, type=int)
+parser.add_argument('--min-block-size', default=1500, type=int)
 parser.add_argument('--max-block-diff', default=500, type=int)
 parser.add_argument('--similarity', default=0.8, type=float)
 parser.add_argument('--diff-width', default=180, type=int)
 parser.add_argument('--no-cleanup', action='store_true')
 parser.add_argument('--all-levels', action='store_true')
 parser.add_argument('--all-files', action='store_true')
-parser.add_argument('-n', default=0, type=int)
+parser.add_argument('-f', action='store_true')
 parser.add_argument('-p', action='store_true')
 parser.add_argument('-d', action='store_true')
 parser.add_argument('-o', '--output')
 
 args, inputs = parser.parse_known_args()
 
-if not inputs: inputs = sys.stdin.read().split('\n')
+filters = 'c,cpp,h,hh,hpp,go,rs,java,js,swift,php'
 
-if args.n: inputs = inputs[:args.n]
+if not inputs:
+   inputs = sys.stdin.read().split('\n')
+   filters = [ f.strip() for f in filters.split(',') ]
+   filters = ['.%s' % f for f in filters]
+   if args.f:
+      inputs = [ f for f in inputs if
+           any([ f.endswith(e) for e in filters ])
+      ]
+   #end
+#end
 
 #------------------------------------------------------------------------------
 #
@@ -206,12 +215,11 @@ if args.p: sys.exit(0)
 # filter out small blocks
 blocks = [ b for b in blocks if len(b.code) > args.min_block_size ]
 
-blocks = sorted(blocks, key=lambda x: len(x.code), reverse=True)
+for b in blocks: b.code = ''.join(b.code)
 
-groups = {0:[]}
+groups = { 0:[] }
 
 for b in blocks:
-    b.code = ''.join(b.code)
     bf = b.file
     groups[0] += [b] # global group
     if bf in groups:
@@ -220,6 +228,11 @@ for b in blocks:
        groups[bf] = [b]
     #end
 #end
+
+groups = {
+   k : sorted(groups[k], key=lambda x: len(x.code), reverse=True)
+   for k in groups
+}
 
 skip = []
 
@@ -268,9 +281,9 @@ keys = {0} # use the global block list for now
 
 for k in keys:
 
-   blks = groups[k]
+   blist = groups[k]
 
-   L = len(blks)
+   L = len(blist)
 
    for i in range(0, L):
 
@@ -281,7 +294,7 @@ for k in keys:
          # skip if either block is a child of matched block
          if i in skip or j in skip: continue
 
-         bi = blks[i]; bj = blks[j]
+         bi = blist[i]; bj = blist[j]
 
          # skip if filenames are unrelated
          if skip_unrelated_files(bi.file, bj.file): continue
