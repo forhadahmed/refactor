@@ -1,5 +1,5 @@
 * parallel processing
-8 parsing support for indent-based languages (python)
+* parsing support for indent-based languages (python)
 * reduce parse errors
   - java parse errors (not debugged)
   - c/c++ parse errors: #if blocks with unmatched {/}
