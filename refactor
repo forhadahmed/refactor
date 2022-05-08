@@ -7,7 +7,7 @@ from difflib import ndiff as ndiff
 #------------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--min-block-size', default=1500, type=int)
+parser.add_argument('--min-block-size', default=1200, type=int)
 parser.add_argument('--max-block-diff', default=500, type=int)
 parser.add_argument('--similarity', default=0.8, type=float)
 parser.add_argument('--diff-width', default=180, type=int)
