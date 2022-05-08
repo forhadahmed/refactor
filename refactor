@@ -14,9 +14,9 @@ parser.add_argument('--diff-width', default=180, type=int)
 parser.add_argument('--no-cleanup', action='store_true')
 parser.add_argument('--all-levels', action='store_true')
 parser.add_argument('--all-files', action='store_true')
-parser.add_argument('-f', action='store_true')
-parser.add_argument('-p', action='store_true')
-parser.add_argument('-d', action='store_true')
+parser.add_argument('-f', action='store_true') # file filters
+parser.add_argument('-p', action='store_true') # parse only
+parser.add_argument('-d', action='store_true') # debug
 parser.add_argument('-o', '--output')
 
 args, inputs = parser.parse_known_args()
@@ -100,7 +100,6 @@ class block:
        if self.parent: self.parent.add_code(c)
    #end
 #end
-
 
 def process(file, ch, line):
 
