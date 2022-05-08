@@ -1,3 +1,4 @@
+* parallel processing
 * parsing support for indent-based languages (python)
 * reduce parse errors
   - java parse errors (not debugged)

@@ -6,6 +6,8 @@ The intended uscases are:
 - refactoring similar blocks of code into common functions/templates *(not a part of this tool)*
 - finding unintentional mismatches as a result of copy/pasting (and only partially updating) code  
 
+*[The Impact of Duplicate Code](https://levelup.gitconnected.com/the-impact-of-duplicate-code-31c0bceab831)*
+
 # Implementation
 
 A block (or "scope") within a source file is code enclosed within brackets: `{ ... }`.  
