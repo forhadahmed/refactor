@@ -1,6 +1,6 @@
 # Introduction
 
-`refactor` is a tool that analyzes source files ("curly-bracket" languages: C/C++/JS/Java/Go/etc...) and identifies blocks of code that appear to be similar.  
+`refactor` is a tool that analyzes source files (most programming languages: C/C++/JS/Python/Java/Go/etc...) and identifies blocks of code that appear to be similar.  
 
 The intended uscases are:
 - refactoring similar blocks of code into common functions/templates *(not a part of this tool)*
