@@ -23,7 +23,7 @@ parser.add_argument('-o', '--output')
 
 args, inputs = parser.parse_known_args()
 
-filters = 'c,cpp,h,hh,hpp,go,rs,java,js,swift,php'
+filters = 'c,cpp,h,hh,hpp,py,go,rs,java,js,swift,php'
 
 if not inputs:
    inputs = sys.stdin.read().split('\n')
