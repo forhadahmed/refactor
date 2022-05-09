@@ -286,6 +286,9 @@ for fn in inputs:
 
 #end
 
+# filter out small blocks
+blocks = [ b for b in blocks if len(b.code) > args.min_block_size ]
+
 #
 # debugging
 #
@@ -310,8 +313,6 @@ if args.p or args.b:
 #
 #------------------------------------------------------------------------------
 
-# filter out small blocks
-blocks = [ b for b in blocks if len(b.code) > args.min_block_size ]
 
 groups = { 0:[] }
 
