@@ -54,7 +54,7 @@ The output of the tool is an [HTML report](#examples) containing the similar blo
 
 # Options
 
-- `--min-block-size` Minimum block size/length in characters (default=1000).  Blocks that are smaller than this threshold are not considered for comparison against any other block
+- `--min-block-size` Minimum block size/length in characters (default=1500).  Blocks that are smaller than this threshold are not considered for comparison against any other block
 - `--max-block-diff` Maximum length diff between two blocks in characters (default=500).  Two blocks that differ in length more than this amount are not considered for comparison against each other.  For example, a block of length 2000 chars and another block of length 3000 chars will not be compared for similarity by default (a length difference that large means they have no chance of being similar)
 - `--all-levels` By default, only blocks in the *same level* of hierarchy are considered for comparison.  For example, in the [Implementation](#implementation) section, blocks `#1`/`#2` are compared and blocks `#3`/`#4` are compared.  Blocks `#2`/`#3` *are not* compared by default. This option enables comparisons across different levels of the tree (more time consuming)
 - `--all-files` In most cases, similar blocks come either from one source file (two blocks within the same file have similar code) or from two source files that are similarly named (with small variations in the name). By default, this tool *does not* compare two blocks coming from two source files that are named very differently:  For example:
