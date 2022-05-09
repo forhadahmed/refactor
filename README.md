@@ -10,7 +10,7 @@ The intended uscases are:
 
 # Implementation
 
-A block (or "scope") within a source file is code enclosed within brackets: `{ ... }`.  
+A block (or "scope") within a source file is code enclosed within brackets: `{ ... }` or within an indent level (python).  
 
 Blocks are heirarchical:
 - a block can have multiple "child" block/scopes 
