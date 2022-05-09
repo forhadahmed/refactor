@@ -17,6 +17,7 @@ parser.add_argument('--all-files', action='store_true')
 parser.add_argument('--python', action='store_true')
 parser.add_argument('-f', action='store_true') # file filters
 parser.add_argument('-p', action='store_true') # parse only
+parser.add_argument('-b', action='store_true') # show blocks
 parser.add_argument('-d', action='store_true') # debug
 parser.add_argument('-o', '--output')
 
@@ -74,33 +75,24 @@ def prints(s, rate=100000, force=0):
 #
 #------------------------------------------------------------------------------
 
-code     = 0 # normal code
-macro    = 1 # #define ...
-string1  = 2 # "abc"
-string2  = 3 # 'd'
-comment1 = 4 # // comment
-comment2 = 5 # /* comment */
-
-state  = code
-indent = 0
-stack  = []
-blocks = []
-
 class block:
    def __init__(self, file, line, indent, parent):
        self.file = file
+       self.size = 0
        self.range = [line,-1]
        self.indent = indent
        self.parent = parent
-       self.code = []
+       self.code = ""
        self.children = []
    #end
 
    def add_code(self, c):
-       self.code += [c]
+       self.code += c
        if self.parent: self.parent.add_code(c)
    #end
 #end
+
+#-- Python --------------------------------------------------------------------
 
 def process_py(file, line, ln, indent):
 
@@ -139,7 +131,7 @@ def process_py(file, line, ln, indent):
 
 #end
 
-def process_pyfile(fn, f):
+def process_pfile(fn, f):
 
     global state, ln
 
@@ -157,6 +149,20 @@ def process_pyfile(fn, f):
     #end
 
 #end
+
+#-- C/C++ (curly bracket languages) -------------------------------------------
+
+code     = 0 # normal code
+macro    = 1 # #define ...
+string1  = 2 # "abc"
+string2  = 3 # 'd'
+comment1 = 4 # // comment
+comment2 = 5 # /* comment */
+
+state  = code
+indent = 0
+stack  = []
+blocks = []
 
 def process_ch(file, ch, ln):
 
@@ -252,6 +258,12 @@ def process_cfile(fn, f):
 
 #end
 
+#------------------------------------------------------------------------------
+#
+#  Main
+#
+#------------------------------------------------------------------------------
+
 for fn in inputs:
 
   ln = 1
@@ -263,22 +275,29 @@ for fn in inputs:
   if not os.path.isfile(fn): continue
 
   if fn.endswith('.py') or args.python:
-     with open(fn) as f: process_pyfile(fn, f)
+     with open(fn) as f: process_pfile(fn, f)
   else:
      with open(fn) as f: process_cfile(fn, f)
+  #end
 
 #end
 
-if args.p:
-
-   for b in blocks:
-       print('-'*len(b.file))
-       print(b.file)
-       print('-'*len(b.file))
-       for line in b.code:
-           print(line,end="")
-
+#
+# debugging
+#
+if args.p or args.b:
+   if args.p: print(len(blocks), 'blocks')
+   if args.b:
+      for b in blocks:
+          print('-'*len(b.file))
+          print(b.file)
+          print('-'*len(b.file))
+          for line in b.code: print(line,end="")
+          print()
+      #end
+   #end
    sys.exit(0)
+#end
 
 #------------------------------------------------------------------------------
 #
@@ -288,8 +307,6 @@ if args.p:
 
 # filter out small blocks
 blocks = [ b for b in blocks if len(b.code) > args.min_block_size ]
-
-for b in blocks: b.code = ''.join(b.code)
 
 groups = { 0:[] }
 
