@@ -58,7 +58,7 @@ if sys.stdout.isatty():
    tty = 1
 #end
 
-def prints(s, rate=100000, force=0):
+def prints(s, rate=200000, force=0):
     if not tty: return
     global mlen, sidx
     sidx += 1
@@ -96,12 +96,12 @@ class block:
 
 #-- Python --------------------------------------------------------------------
 
-def process_py(file, line, ln, indent):
+def process_py(fn, line, ln, indent):
 
     global stack, blocks
 
     if args.d:
-       print(file, '%5d' % ln, '%2d' % indent, end='')
+       print(fn, '%5d' % ln, '%2d' % indent, end='')
        print(' [%s]' % ('.' * len(stack)), line, end='')
     #end
 
@@ -115,7 +115,7 @@ def process_py(file, line, ln, indent):
     if indent == top.indent: top.add_code(line)
 
     if indent > top.indent:
-       b = block(file, ln, indent, top)
+       b = block(fn, ln, indent, top)
        b.add_code(line)
        stack.append(b)
        blocks.append(b)
@@ -123,7 +123,7 @@ def process_py(file, line, ln, indent):
 
     if indent < top.indent:
        if not stack:
-          print('[!] %s:%d' % (file, ln)) # error
+          print('[!] %s:%d' % (fn, ln)) # error
           return False
        while 1:
           b = stack.pop()
@@ -142,6 +142,8 @@ def process_pfile(fn, f):
     b = block(fn, 1, 0, None)
     stack.append(b)
     blocks.append(b)
+
+    prints(fn)
 
     for ln, line in enumerate(f):
         ln = ln+1
@@ -210,53 +212,48 @@ def process_cfile(fn, f):
 
     global state, ln
 
-    try:
 
-      ch = 0; pch = 0
+    ch = 0; pch = 0
 
-      while 1:
+    while 1:
 
-        ch = f.read(1)
-        if not ch: break
-        if ch == '\n': ln += 1
+      ch = f.read(1)
+      if not ch: break
+      if ch == '\n': ln += 1
 
-        if state == code:
-           if ch == '#': state = macro
-           if ch == '"': state = string1
-           if ch == "'": state = string2
-           if ch == '/':
-              if not process_ch(fn, ch, ln): break
+      if state == code:
+         if ch == '#': state = macro
+         if ch == '"': state = string1
+         if ch == "'": state = string2
+         if ch == '/':
+            if not process_ch(fn, ch, ln): break
 
-              ch = f.read(1)
-              if not ch: break
-              if ch == '\n': ln += 1
+            ch = f.read(1)
+            if not ch: break
+            if ch == '\n': ln += 1
 
-              if ch == '/': state = comment1
-              if ch == '*': state = comment2
+            if ch == '/': state = comment1
+            if ch == '*': state = comment2
 
-        elif state == string1:
-           if ch == '"': state = code
+      elif state == string1:
+         if ch == '"': state = code
 
-        elif state == string2:
-           if ch == "'": state = code
+      elif state == string2:
+         if ch == "'": state = code
 
-        elif state == comment1 or state == macro:
-           if ch == '\n' and pch != '\\': state = code
+      elif state == comment1 or state == macro:
+         if ch == '\n' and pch != '\\': state = code
 
-        elif state == comment2:
-           if ch == '/' and pch == '*': state = code
-        #end
-
-        if not process_ch(fn, ch, ln): break
-
-        pch = ch
-
+      elif state == comment2:
+         if ch == '/' and pch == '*': state = code
       #end
 
-    except KeyboardInterrupt:
-       sys.exit(1)
-    except UnicodeDecodeError:
-       pass
+      if not process_ch(fn, ch, ln): break
+
+      pch = ch
+
+    #end
+
 
     if indent or stack: print('[!] %s:%d' % (fn, ln)) # error
 
@@ -270,19 +267,27 @@ def process_cfile(fn, f):
 
 for fn in inputs:
 
-  ln = 1
-  state = code
-  stack = []
-  indent = 0
-  mlen = max(len(fn), mlen)
+   ln = 1
+   state = code
+   stack = []
+   indent = 0
+   mlen = max(len(fn), mlen)
 
-  if not os.path.isfile(fn): continue
+   if not os.path.isfile(fn): continue
 
-  if fn.endswith('.py') or args.python:
-     with open(fn) as f: process_pfile(fn, f)
-  else:
-     with open(fn) as f: process_cfile(fn, f)
-  #end
+   try:
+
+      if fn.endswith('.py') or args.python:
+         with open(fn) as f: process_pfile(fn, f)
+      else:
+         with open(fn) as f: process_cfile(fn, f)
+      #end
+
+   except KeyboardInterrupt:
+      sys.exit(1)
+   except UnicodeDecodeError:
+      pass
+
 
 #end
 
