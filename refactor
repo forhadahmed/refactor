@@ -67,8 +67,6 @@ def prints(s, rate=200000, force=0):
        if len(s) > cols: s = s[:cols-4] + '...'
        sys.stdout.write(s + ' ' * (cols - len(s)) + '\r')
        sys.stdout.flush()
-    else:
-      pass
 
 #------------------------------------------------------------------------------
 #
