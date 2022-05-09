@@ -65,9 +65,10 @@ def prints(s, rate=100000, force=0):
     if not (sidx % rate) or force:
        s = ( next(spinner) + ' ' + s )
        if len(s) > cols: s = s[:cols-4] + '...'
-       sys.stdout.write(s)
-       sys.stdout.write(' ' * (cols - len(s)) + '\r')
+       sys.stdout.write(s + ' ' * (cols - len(s)) + '\r')
        sys.stdout.flush()
+    else:
+      pass
 
 #------------------------------------------------------------------------------
 #
@@ -84,6 +85,7 @@ class block:
        self.parent = parent
        self.code = ""
        self.children = []
+       if self.parent: parent.children.append(self)
    #end
 
    def add_code(self, c):
@@ -100,21 +102,23 @@ def process_py(file, line, ln, indent):
 
     if args.d:
        print(file, '%5d' % ln, '%2d' % indent, end='')
-       print(' [%s]' % ('*' * len(stack)))
+       print(' [%s]' % ('.' * len(stack)), line, end='')
     #end
-
-    line = line+'\n'
-
-    if line[indent] in ['#','"',"'"]: return
 
     top = stack[-1]
 
+    if not line.rstrip() or line[indent] in ['#','"',"'"]:
+       top.add_code(line)
+       return
+    #end
+
+    if indent == top.indent: top.add_code(line)
+
     if indent > top.indent:
        b = block(file, ln, indent, top)
-       if top: top.children.append(b)
+       b.add_code(line)
        stack.append(b)
        blocks.append(b)
-       b.add_code(line)
     #end
 
     if indent < top.indent:
@@ -135,12 +139,12 @@ def process_pfile(fn, f):
 
     global state, ln
 
-    stack.append(block(fn, 1, 0, None))
+    b = block(fn, 1, 0, None)
+    stack.append(b)
+    blocks.append(b)
 
     for ln, line in enumerate(f):
         ln = ln+1
-        line = line.rstrip()
-        if not line: continue
         indent = 0
         for ch in line:
             if ch.isspace(): indent += 1
@@ -179,7 +183,6 @@ def process_ch(file, ch, ln):
     if ch == '{' and state == code:
        indent += 1
        b = block(file, ln, indent, top)
-       if top: top.children.append(b)
        stack.append(b)
        blocks.append(b)
     #end
@@ -194,7 +197,7 @@ def process_ch(file, ch, ln):
        b.range[1] = ln
     #end
 
-    #prints(file)
+    prints(file)
 
     if top: top.add_code(ch)
 
@@ -289,9 +292,10 @@ if args.p or args.b:
    if args.p: print(len(blocks), 'blocks')
    if args.b:
       for b in blocks:
-          print('-'*len(b.file))
-          print(b.file)
-          print('-'*len(b.file))
+          hlen = len(b.file)+30
+          print('-'*hlen)
+          print('%s:%d - %d'%(b.file,b.range[0],b.indent))
+          print('-'*hlen)
           for line in b.code: print(line,end="")
           print()
       #end
