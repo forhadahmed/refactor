@@ -12,7 +12,7 @@ parser.add_argument('--max-block-diff', default=500, type=int)
 parser.add_argument('--similarity', default=0.8, type=float)
 parser.add_argument('--diff-width', default=180, type=int)
 parser.add_argument('--no-cleanup', action='store_true')
-parser.add_argument('--all-levels', action='store_true')
+parser.add_argument('--all-indents', action='store_true')
 parser.add_argument('--all-files', action='store_true')
 parser.add_argument('-f', action='store_true')
 parser.add_argument('-p', action='store_true')
@@ -101,13 +101,66 @@ class block:
    #end
 #end
 
+def process_py(file, line, ln, indent):
 
-def process(file, ch, line):
+    global stack, blocks
+
+    if args.d:
+       print(file, '%5d' % ln, '%2d' % indent, end='')
+       print(' [%s]' % ('*' * len(stack)))
+    #end
+
+    if line[indent] in ['#','"',"'"]: return
+
+    top = stack[-1]
+
+    if indent > top.indent:
+       b = block(file, ln, indent, top)
+       if top: top.children.append(b)
+       stack.append(b)
+       blocks.append(b)
+    #end
+
+    if indent < top.indent:
+       if not stack:
+          print('[!] %s:%d' % (file, ln)) # error
+          return False
+       while 1:
+          b = stack.pop()
+          b.range[1] = ln
+          top = stack[-1]
+          if indent >= top.indent: break
+    #end
+
+    top.add_code(line+'\n')
+
+#end
+
+def process_pyfile(fn, f):
+
+    global state, ln
+
+    stack.append(block(fn, 1, 0, None))
+
+    for ln, line in enumerate(f):
+        ln = ln+1
+        line = line.rstrip()
+        if not line: continue
+        indent = 0
+        for ch in line:
+            if ch.isspace(): indent += 1
+            else: break
+        process_py(fn, line, ln, indent)
+    #end
+
+#end
+
+def process_ch(file, ch, ln):
 
     global state, indent, stack, blocks
 
     if args.d:
-       print(file, '%5d' % line, state, end='')
+       print(file, '%5d' % ln, state, end='')
        print('  ' if ch.isspace() else ' %s' % ch, end='')
        print(' [%s]' % ('*' * len(stack)))
     #end
@@ -116,7 +169,7 @@ def process(file, ch, line):
     # start of block
     if ch == '{' and state == code:
        indent += 1
-       b = block(file, line, indent, top)
+       b = block(file, ln, indent, top)
        if top: top.children.append(b)
        stack.append(b)
        blocks.append(b)
@@ -126,13 +179,13 @@ def process(file, ch, line):
     if ch == '}' and state == code:
        indent -= 1
        if not stack:
-          print('[!] %s:%d' % (file, line)) # error
+          print('[!] %s:%d' % (file, ln)) # error
           return False
        b = stack.pop()
-       b.range[1] = line
+       b.range[1] = ln
     #end
 
-    prints(file)
+    #prints(file)
 
     if top: top.add_code(ch)
 
@@ -140,9 +193,9 @@ def process(file, ch, line):
 
 #end
 
-def process_file(f):
+def process_cfile(fn, f):
 
-    global state, line
+    global state, ln
 
     try:
 
@@ -152,18 +205,18 @@ def process_file(f):
 
         ch = f.read(1)
         if not ch: break
-        if ch == '\n': line += 1
+        if ch == '\n': ln += 1
 
         if state == code:
            if ch == '#': state = macro
            if ch == '"': state = string1
            if ch == "'": state = string2
            if ch == '/':
-              if not process(fn, ch, line): break
+              if not process_ch(fn, ch, ln): break
 
               ch = f.read(1)
               if not ch: break
-              if ch == '\n': line += 1
+              if ch == '\n': ln += 1
 
               if ch == '/': state = comment1
               if ch == '*': state = comment2
@@ -181,7 +234,7 @@ def process_file(f):
            if ch == '/' and pch == '*': state = code
         #end
 
-        if not process(fn, ch, line): break
+        if not process_ch(fn, ch, ln): break
 
         pch = ch
 
@@ -192,13 +245,13 @@ def process_file(f):
     except UnicodeDecodeError:
        pass
 
-    if indent or stack: print('[!] %s:%d' % (fn, line)) # error
+    if indent or stack: print('[!] %s:%d' % (fn, ln)) # error
 
 #end
 
 for fn in inputs:
 
-  line = 1
+  ln = 1
   state = code
   stack = []
   indent = 0
@@ -206,7 +259,10 @@ for fn in inputs:
 
   if not os.path.isfile(fn): continue
 
-  with open(fn) as f: process_file(f)
+  if fn.endswith('.py'):
+     with open(fn) as f: process_pyfile(fn, f)
+  else:
+     with open(fn) as f: process_cfile(fn, f)
 
 #end
 
@@ -311,8 +367,8 @@ for k in keys:
          # skip if the length of code sections differs by a threshold
          if abs(len(bi.code)-len(bj.code)) > args.max_block_diff: continue
 
-         # skip if blocks are not on the same level
-         if not args.all_levels and bi.indent != bj.indent: continue
+         # skip if blocks are not on the same indent
+         if not args.all_indents and bi.indent != bj.indent: continue
 
          # do the comparison (skip if blocks are not similar)
          sm = SM(None, bi.code, bj.code)
