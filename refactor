@@ -296,7 +296,7 @@ blocks = [ b for b in blocks if len(b.code) > args.min_block_size ]
 # debugging
 #
 if args.p or args.b:
-   if args.p: print(len(blocks), 'blocks')
+   print(len(blocks), 'blocks')
    if args.b:
       for b in blocks:
           hlen = len(b.file)+30
@@ -339,8 +339,8 @@ skip = []
 def skip_children(b):
     global skip
     for ch in b.children:
-      if ch in blocks:
-        skip += [blocks.index(ch)]
+      if ch in blist:
+        skip += [blist.index(ch)]
         skip_children(ch)
     #end
 #end
