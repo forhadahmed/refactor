@@ -58,7 +58,7 @@ if sys.stdout.isatty():
    tty = 1
 #end
 
-def prints(s, rate=200000, force=0):
+def prints(s, rate=1, force=0):
     if not tty: return
     global mlen, sidx
     sidx += 1
@@ -198,8 +198,6 @@ def process_ch(fn, ch, ln):
        top = stack[-1] if stack else 0
     #end
 
-    prints(fn)
-
     if top: top.add_code(ch)
 
     return True;
@@ -209,7 +207,6 @@ def process_ch(fn, ch, ln):
 def process_cfile(fn, f):
 
     global state, ln
-
 
     ch = 0; pch = 0
 
@@ -252,7 +249,6 @@ def process_cfile(fn, f):
 
     #end
 
-
     if indent or stack: print('[!] %s:%d' % (fn, ln)) # error
 
 #end
@@ -274,6 +270,8 @@ for fn in inputs:
    if not os.path.isfile(fn): continue
 
    try:
+      
+      prints(fn, rate=2)
 
       if fn.endswith('.py') or args.python:
          with open(fn) as f: process_pfile(fn, f)
