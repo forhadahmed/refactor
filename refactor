@@ -556,7 +556,7 @@ root = '/tmp/refactor-%d' % os.getpid()
 os.system('mkdir -p %s/diffs' % root)
 os.system('mkdir -p %s/files' % root)
 
-def dash(fname): fname.replace('/', '-')
+def dash(fname): return fname.replace('/', '-')
 
 index = 1000
 
