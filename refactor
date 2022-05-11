@@ -271,7 +271,7 @@ for fn in inputs:
 
    try:
       
-      prints(fn, rate=2)
+      prints(fn)
 
       if fn.endswith('.py') or args.python:
          with open(fn) as f: process_pfile(fn, f)
@@ -283,7 +283,6 @@ for fn in inputs:
       sys.exit(1)
    except UnicodeDecodeError:
       pass
-
 
 #end
 
