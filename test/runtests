@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import json
+import subprocess
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)) + '/..')
+
+REFACTOR = './refactor'
+PASS = 0
+FAIL = 0
+
+GRN = '\033[32m'
+RED = '\033[31m'
+RST = '\033[0m'
+
+def passed(msg):
+    global PASS
+    print(f'{GRN}[PASS]{RST} {msg}')
+    PASS += 1
+
+def failed(msg):
+    global FAIL
+    print(f'{RED}[FAIL]{RST} {msg}')
+    FAIL += 1
+
+def run(cmd):
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return result.returncode, result.stdout, result.stderr
+
+def run_json(args):
+    _, stdout, _ = run(f'{REFACTOR} --json {args}')
+    try:
+        return json.loads(stdout)
+    except:
+        return None
+
+def check(cmd, msg):
+    code, _, _ = run(cmd)
+    passed(msg) if code == 0 else failed(msg)
+
+def check_json(args, key, expected, msg):
+    data = run_json(args)
+    if data and data.get(key) == expected:
+        passed(msg)
+    else:
+        failed(msg)
+
+def check_contains(cmd, needle, msg):
+    _, stdout, _ = run(cmd)
+    passed(msg) if needle in stdout else failed(msg)
+
+# C parsing
+check(f'{REFACTOR} -p test/utils_v1.c', 'C parse')
+check(f'{REFACTOR} -p test/utils_v2.c', 'C variations parse')
+check(f'{REFACTOR} -p test/similar1.c', 'C similar functions parse')
+check(f'{REFACTOR} -p test/escaped_quotes.c', 'C escaped quotes')
+check(f'{REFACTOR} -p test/escaped_char_literal.c', 'C escaped char literals')
+check(f'{REFACTOR} -p test/line_comment_continuation.c', 'C line comments')
+check(f'{REFACTOR} -p test/braces_in_strings.c', 'C braces in strings parse')
+check(f'{REFACTOR} -p test/nested_similar.c', 'C nested blocks parse')
+check(f'{REFACTOR} -p test/different_indent.c', 'C different indents parse')
+check(f'{REFACTOR} -p test/empty_edge.c', 'C empty blocks parse')
+check(f'{REFACTOR} -p test/max_block_diff.c', 'C max block diff parse')
+
+# C++ parsing
+check(f'{REFACTOR} -p test/container_v1.cpp', 'C++ templates parse')
+check(f'{REFACTOR} -p test/container_v2.cpp', 'C++ variations parse')
+
+# Python parsing
+check(f'{REFACTOR} -p test/data_processor_v1.py', 'Python parse')
+check(f'{REFACTOR} -p test/data_processor_v2.py', 'Python variations parse')
+check(f'{REFACTOR} -p test/multiline_string.py', 'Python multiline strings')
+check(f'{REFACTOR} -p test/stack_edge_cases.py', 'Python edge cases')
+check(f'{REFACTOR} -p test/deep_nesting.py', 'Python deep nesting parse')
+
+# JSON structure
+check(f'{REFACTOR} --json test/utils_v1.c | python3 -m json.tool', 'JSON valid')
+check_json('test/utils_v1.c', 'version', 1, 'JSON version field')
+check_json('test/utils_v1.c', 'files_processed', 1, 'JSON files_processed')
+check_contains(f'{REFACTOR} --json test/utils_v1.c', '"pairs"', 'JSON pairs array')
+check_contains(f'{REFACTOR} --json --min-block-size=100 test/similar1.c', '"line_start"', 'JSON line_start')
+check_contains(f'{REFACTOR} --json --min-block-size=100 test/similar1.c', '"line_end"', 'JSON line_end')
+check_contains(f'{REFACTOR} --json --min-block-size=100 test/similar1.c', '"size"', 'JSON size')
+check_contains(f'{REFACTOR} --json --min-block-size=100 test/similar1.c', '"indent"', 'JSON indent')
+
+# Output formats
+check_contains(f'{REFACTOR} --stats test/utils_v1.c', 'Files processed:', 'Stats files')
+check_contains(f'{REFACTOR} --stats test/utils_v1.c', 'Total blocks:', 'Stats blocks')
+check_contains(f'{REFACTOR} --stats test/utils_v1.c', 'After filtering:', 'Stats filtering')
+check_contains(f'{REFACTOR} --min-block-size=100 test/similar1.c', 'similar blocks found', 'Terminal count')
+check_contains(f'{REFACTOR} --min-block-size=100 test/similar1.c', 'similar1.c', 'Terminal filename')
+check_contains(f'{REFACTOR} --timing --min-block-size=10000 test/utils_v1.c', 'Parsing:', 'Timing output')
+
+# Core: similarity detection
+check_json('--min-block-size=100 test/similar1.c', 'similar_count', 1, 'Same-file match')
+check_json('--min-block-size=300 test/utils_v1.c test/utils_v2.c', 'similar_count', 3, 'Cross-file C match (3)')
+check_json('--min-block-size=300 test/data_processor_v1.py test/data_processor_v2.py', 'similar_count', 1, 'Cross-file Python match')
+data = run_json('--min-block-size=100 test/similar1.c')
+if data and data['pairs'] and data['pairs'][0]['similarity'] > 0.8:
+    passed('Similarity score valid')
+else:
+    failed('Similarity score valid')
+
+# Core: determinism
+out1 = run_json('--min-block-size=300 test/utils_v1.c test/utils_v2.c')
+out2 = run_json('--min-block-size=300 test/utils_v1.c test/utils_v2.c')
+passed('Deterministic output') if out1 == out2 else failed('Deterministic output')
+out1 = run_json('--min-block-size=300 test/data_processor_v1.py test/data_processor_v2.py test/utils_v1.c test/utils_v2.c')
+out2 = run_json('--min-block-size=300 test/data_processor_v1.py test/data_processor_v2.py test/utils_v1.c test/utils_v2.c')
+passed('Multi-file determinism') if out1 == out2 else failed('Multi-file determinism')
+data = run_json('--min-block-size=300 test/utils_v1.c test/utils_v2.c')
+if data and 'utils_v1' in data['pairs'][0]['block1']['file']:
+    passed('Sorted by filename')
+else:
+    failed('Sorted by filename')
+
+# Core: thresholds
+check_json('--min-block-size=100 --similarity=0.995 test/similar1.c', 'similar_count', 0, 'High threshold filters')
+check_json('--min-block-size=100 --similarity=0.5 test/similar1.c', 'similar_count', 1, 'Low threshold allows')
+check_json('--min-block-size=5000 test/utils_v1.c test/utils_v2.c', 'similar_count', 0, 'Large min-size filters')
+check_json('--min-block-size=10000 test/utils_v1.c', 'similar_count', 0, 'No matches when filtered')
+
+# Core: identical blocks
+check_json('--min-block-size=100 test/identical_blocks.c', 'similar_count', 1, 'C identical blocks match')
+data = run_json('--min-block-size=100 test/identical_blocks.c')
+if data and data['pairs'] and data['pairs'][0]['similarity'] == 1.0:
+    passed('C identical = 1.0 similarity')
+else:
+    failed('C identical = 1.0 similarity')
+
+# Core: child block skipping
+data = run_json('--min-block-size=200 test/nested_similar.c')
+if data and data['similar_count'] == 1:
+    passed('C child blocks skipped')
+else:
+    failed('C child blocks skipped')
+
+# Core: string braces ignored
+data = run_json('--min-block-size=50 test/braces_in_strings.c')
+if data and data['blocks_total'] < 20:
+    passed('C string braces ignored')
+else:
+    failed('C string braces ignored')
+
+# Core: cross-indent matching
+without = run_json('--min-block-size=100 test/different_indent.c')
+with_flag = run_json('--min-block-size=100 --all-indents test/different_indent.c')
+if without and with_flag and with_flag['similar_count'] >= without['similar_count']:
+    passed('C cross-indent matching')
+else:
+    failed('C cross-indent matching')
+
+# Core: deep nesting match
+check_json('--min-block-size=100 test/deep_nesting.py', 'similar_count', 1, 'Python deep nesting match')
+
+# Core: match with empty blocks
+check_json('--min-block-size=100 test/empty_edge.c', 'similar_count', 1, 'C match with empty blocks')
+
+# Summary
+print(f'PASS: {PASS}  FAIL: {FAIL}')
+sys.exit(0 if FAIL == 0 else 1)

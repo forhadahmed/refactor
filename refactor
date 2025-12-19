@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import io, os, sys, time, argparse
+import io, os, sys, time, json, argparse, subprocess
 
 from difflib import SequenceMatcher as SM
 from difflib import ndiff as ndiff
@@ -20,6 +20,14 @@ parser.add_argument('-p', action='store_true') # parse only
 parser.add_argument('-b', action='store_true') # show blocks
 parser.add_argument('-d', action='store_true') # debug
 parser.add_argument('-o', '--output')
+parser.add_argument('--html', action='store_true') # html output (default is terminal)
+parser.add_argument('--stats', action='store_true') # block statistics
+parser.add_argument('--tree', action='store_true') # block tree view
+parser.add_argument('--trace-state', action='store_true') # C parser state trace
+parser.add_argument('--trace-mlstr', action='store_true') # Python multiline trace
+parser.add_argument('--verbose-errors', action='store_true') # detailed errors
+parser.add_argument('--timing', action='store_true') # timing breakdown
+parser.add_argument('--json', action='store_true') # json output
 
 args, inputs = parser.parse_known_args()
 
@@ -143,8 +151,33 @@ def process_pfile(fn, f):
 
     prints(fn)
 
+    mlstr = 0 # multiline string state: 0=none, 1=""", 2='''
+    mlstr_start = 0
+
     for ln, line in enumerate(f):
         ln = ln+1
+
+        # skip multiline string detection in comments
+        stripped = line.lstrip()
+        is_comment = stripped.startswith('#')
+
+        # check for multiline string start/end
+        if mlstr:
+           if mlstr == 1 and '"""' in line:
+              if args.trace_mlstr: print('MLSTR """ EXIT  %s:%d (%d lines)' % (fn, ln, ln - mlstr_start))
+              mlstr = 0
+           if mlstr == 2 and "'''" in line:
+              if args.trace_mlstr: print("MLSTR ''' EXIT  %s:%d (%d lines)" % (fn, ln, ln - mlstr_start))
+              mlstr = 0
+           stack[-1].add_code(line)
+           continue
+        if not is_comment and '"""' in line and line.count('"""') == 1:
+           mlstr = 1; mlstr_start = ln
+           if args.trace_mlstr: print('MLSTR """ ENTER %s:%d' % (fn, ln))
+        elif not is_comment and "'''" in line and line.count("'''") == 1:
+           mlstr = 2; mlstr_start = ln
+           if args.trace_mlstr: print("MLSTR ''' ENTER %s:%d" % (fn, ln))
+
         indent = 0
         for ch in line:
             if ch.isspace(): indent += 1
@@ -163,7 +196,18 @@ string2  = 3 # 'd'
 comment1 = 4 # // comment
 comment2 = 5 # /* comment */
 
+state_names = ['code','macro','string1','string2','comment1','comment2']
+
 state  = code
+
+# timing
+tparse = 0
+tfilter = 0
+tcompare = 0
+toutput = 0
+
+# state trace history for verbose errors
+state_history = []
 indent = 0
 stack  = []
 blocks = []
@@ -206,15 +250,18 @@ def process_ch(fn, ch, ln):
 
 def process_cfile(fn, f):
 
-    global state, ln
+    global state, ln, state_history
 
-    ch = 0; pch = 0
+    ch = 0; pch = 0; esc = 0
+    state_history = []
 
     while 1:
 
       ch = f.read(1)
       if not ch: break
       if ch == '\n': ln += 1
+
+      pstate = state
 
       if state == code:
          if ch == '#': state = macro
@@ -231,25 +278,48 @@ def process_cfile(fn, f):
             if ch == '*': state = comment2
 
       elif state == string1:
-         if ch == '"': state = code
+         if ch == '"' and not esc: state = code
 
       elif state == string2:
-         if ch == "'": state = code
+         if ch == "'" and not esc: state = code
 
-      elif state == comment1 or state == macro:
+      elif state == comment1:
+         if ch == '\n': state = code
+
+      elif state == macro:
          if ch == '\n' and pch != '\\': state = code
 
       elif state == comment2:
          if ch == '/' and pch == '*': state = code
       #end
 
+      if state != pstate and args.trace_state:
+         tr = '%s -> %s' % (state_names[pstate], state_names[state])
+         print('TRACE %s:%d %s (ch=%s)' % (fn, ln, tr, repr(ch)))
+      if state != pstate and args.verbose_errors:
+         state_history.append((ln, pstate, state, ch))
+         if len(state_history) > 5: state_history.pop(0)
+
       if not process_ch(fn, ch, ln): break
 
+      esc = (ch == '\\' and not esc)
       pch = ch
 
     #end
 
-    if indent or stack: print('[!] %s:%d' % (fn, ln)) # error
+    if not indent and not stack: return
+    print('[!] %s:%d' % (fn, ln)) # error
+    if not args.verbose_errors: return
+    print('    indent=%d stack_depth=%d state=%s' % (indent, len(stack), state_names[state]))
+    if state_history:
+       print('    last state changes:')
+       for h in state_history:
+          print('      L%d: %s -> %s (ch=%s)' % (h[0], state_names[h[1]], state_names[h[2]], repr(h[3])))
+       #end
+    #end
+    if stack:
+       print('    stack: %s' % ', '.join(['L%d' % b.range[0] for b in stack]))
+    #end
 
 #end
 
@@ -258,6 +328,9 @@ def process_cfile(fn, f):
 #  Main
 #
 #------------------------------------------------------------------------------
+
+nfiles = 0
+t0 = time.time()
 
 for fn in inputs:
 
@@ -269,8 +342,10 @@ for fn in inputs:
 
    if not os.path.isfile(fn): continue
 
+   nfiles += 1
+
    try:
-      
+
       prints(fn)
 
       if fn.endswith('.py') or args.python:
@@ -286,8 +361,52 @@ for fn in inputs:
 
 #end
 
+tparse = time.time() - t0
+
 # filter out small blocks
+t0 = time.time()
+nraw = len(blocks)
 blocks = [ b for b in blocks if len(b.code) > args.min_block_size ]
+for b in blocks: b.size = len(b.code)
+tfilter = time.time() - t0
+
+#
+# stats output
+#
+if args.stats:
+   sizes = [len(b.code) for b in blocks]
+   indents = {}
+   for b in blocks: indents[b.indent] = indents.get(b.indent, 0) + 1
+   largest = max(blocks, key=lambda x: len(x.code)) if blocks else None
+   print('--- Statistics ---')
+   print('Files processed:  %d' % nfiles)
+   print('Total blocks:     %d' % nraw)
+   print('After filtering:  %d (min=%d chars)' % (len(blocks), args.min_block_size))
+   if sizes:
+      print('Avg block size:   %d chars' % (sum(sizes) // len(sizes)))
+      print('Largest block:    %s:%d (%d chars)' % (largest.file, largest.range[0], len(largest.code)))
+   #end
+   istr = ', '.join(['L%d=%d' % (k, indents[k]) for k in sorted(indents.keys())])
+   print('Blocks by indent: %s' % istr)
+#end
+
+#
+# tree output
+#
+def print_tree(b, prefix=''):
+   rng = '%d-%d' % (b.range[0], b.range[1]) if b.range[1] > 0 else '%d-?' % b.range[0]
+   print('%s%s:%s (%d chars)' % (prefix, b.file if not prefix else '', rng, len(b.code)))
+   for i, ch in enumerate(b.children):
+      is_last = (i == len(b.children) - 1)
+      print_tree(ch, prefix + ('    ' if is_last else '|   '))
+   #end
+#end
+
+if args.tree:
+   print('--- Block Tree ---')
+   roots = [b for b in blocks if b.parent is None or b.parent not in blocks]
+   for r in roots: print_tree(r)
+#end
 
 #
 # debugging
@@ -319,11 +438,8 @@ groups = { 0:[] }
 for b in blocks:
     bf = b.file
     groups[0] += [b] # global group
-    if bf in groups:
-       groups[bf] += [b]
-    else:
-       groups[bf] = [b]
-    #end
+    if bf not in groups: groups[bf] = []
+    groups[bf] += [b]
 #end
 
 groups = {
@@ -331,13 +447,14 @@ groups = {
    for k in groups
 }
 
-skip = []
+skip = set()
+bidx = {}
 
 def skip_children(b):
     global skip
     for ch in b.children:
-      if ch in blist:
-        skip += [blist.index(ch)]
+      if ch in bidx:
+        skip.add(bidx[ch])
         skip_children(ch)
     #end
 #end
@@ -355,30 +472,25 @@ fcache = {}
 
 # return true to skip block comparison based on filenames
 def skip_unrelated_files(f1, f2):
-    if args.all_files: return False
     global fcache
+    if args.all_files: return False
+    if f1 == f2: return False
     if (f1,f2) in fcache: return fcache[(f1,f2)]
     if (f2,f1) in fcache: return fcache[(f2,f1)]
-    if f1 == f2:
-       return False
-    else:
-       if SM(None, f1, f2).ratio() < 0.9:
-          fcache[(f1,f2)] = True
-          return True
-       else:
-          fcache[(f1,f2)] = False
-          return False
-       #end
-    #end
+    fcache[(f1,f2)] = SM(None, f1, f2).ratio() < 0.9
+    return fcache[(f1,f2)]
 #end
 
 similar = []
 
 keys = {0} # use the global block list for now
 
+t0 = time.time()
+
 for k in keys:
 
    blist = groups[k]
+   bidx = {b: i for i, b in enumerate(blist)}
 
    L = len(blist)
 
@@ -393,14 +505,14 @@ for k in keys:
 
          bi = blist[i]; bj = blist[j]
 
+         # break if size diff too large (blocks sorted by size, so all remaining j are smaller)
+         if bi.size - bj.size > args.max_block_diff: break
+
          # skip if filenames are unrelated
          if skip_unrelated_files(bi.file, bj.file): continue
 
          # skip if one block is a parent of another
          if ancestor(bi, bj) or ancestor(bj, bi): continue
-
-         # skip if the length of code sections differs by a threshold
-         if abs(len(bi.code)-len(bj.code)) > args.max_block_diff: continue
 
          # skip if blocks are not on the same indent
          if not args.all_indents and bi.indent != bj.indent: continue
@@ -408,13 +520,18 @@ for k in keys:
          # do the comparison (skip if blocks are not similar)
          sm = SM(None, bi.code, bj.code)
          if sm.quick_ratio() < args.similarity: continue
-         if sm.ratio()       < args.similarity: continue
+         ratio = sm.ratio()
+         if ratio < args.similarity: continue
 
          # found similar blocks - add their children to the skip list
          skip_children(bi); skip_children(bj)
 
-         # save the similar blocks for post-processing
-         similar += [(bi,bj)] if len(bj.code) > len(bi.code) else [(bj,bi)]
+         # save the similar blocks for post-processing (smaller first, with ratio)
+         if bj.size > bi.size:
+            similar.append((bi, bj, ratio))
+         else:
+            similar.append((bj, bi, ratio))
+         #end
 
       #end
 
@@ -422,7 +539,96 @@ for k in keys:
 
 #end
 
-similar = sorted(similar, key=lambda x: len(x[0].code), reverse=True)
+tcompare = time.time() - t0
+
+# sort deterministically: by first file, then first line, then second file, then second line
+similar = sorted(similar, key=lambda x: (x[0].file, x[0].range[0], x[1].file, x[1].range[0]))
+
+#------------------------------------------------------------------------------
+#
+#  Terminal formatting helpers
+#
+#------------------------------------------------------------------------------
+
+# ANSI color codes
+TRED = '\033[41m'  # red background
+TGRN = '\033[42m'  # green background
+TBLD = '\033[1m'   # bold
+TRST = '\033[0m'   # reset
+TGRY = '\033[90m'  # gray text
+TYEL = '\033[33m'  # yellow text
+TDIV = ' │ '       # vertical divider
+TDIVY = ' ' + TYEL + '│' + TRST + ' '  # yellow divider for differences
+
+def chardiff(s1, s2, half):
+    # character-by-character diff using ndiff
+    S1 = ''; S2 = ''; len1 = 0; len2 = 0
+    for d in ndiff(s1, s2):
+        op, ch = d[0], d[2]
+        if op == ' ':
+            S1 += ch; S2 += ch; len1 += 1; len2 += 1
+        elif op == '-':
+            S1 += TRED + ch + TRST; len1 += 1
+        elif op == '+':
+            S2 += TGRN + ch + TRST; len2 += 1
+        #end
+    #end
+    # pad to half width
+    if len1 < half: S1 += ' ' * (half - len1)
+    if len2 < half: S2 += ' ' * (half - len2)
+    return S1, S2
+#end
+
+def diff2term(bi, bj, width):
+    out = ''
+    middle = width // 2
+    half = middle - 2
+
+    # header
+    H1 = ' %s:%d ' % (bi.file, bi.range[0])
+    H2 = ' %s:%d ' % (bj.file, bj.range[0])
+    hdr = TBLD + H1.ljust(half) + ' │ ' + H2.ljust(half) + TRST
+    out += '\n' + '-' * width + '\n'
+    out += hdr + '\n'
+    out += '-' * width + '\n'
+
+    # get lines from both blocks
+    lines1 = bi.code.splitlines()
+    lines2 = bj.code.splitlines()
+
+    # line-by-line diff
+    sm = SM(None, lines1, lines2)
+
+    for op, i1, i2, j1, j2 in sm.get_opcodes():
+        if op == 'equal':
+            for k in range(i2 - i1):
+                L1 = lines1[i1 + k][:half].ljust(half)
+                L2 = lines2[j1 + k][:half].ljust(half)
+                out += L1 + TDIV + L2 + '\n'
+            #end
+        elif op == 'replace':
+            maxlen = max(i2 - i1, j2 - j1)
+            for k in range(maxlen):
+                s1 = lines1[i1 + k][:half] if i1 + k < i2 else ''
+                s2 = lines2[j1 + k][:half] if j1 + k < j2 else ''
+                L1, L2 = chardiff(s1, s2, half)
+                out += L1 + TDIVY + L2 + '\n'
+            #end
+        elif op == 'delete':
+            for k in range(i2 - i1):
+                L1 = TRED + lines1[i1 + k][:half].ljust(half) + TRST
+                out += L1 + TDIVY + ' ' * half + '\n'
+            #end
+        elif op == 'insert':
+            for k in range(j2 - j1):
+                L2 = TGRN + lines2[j1 + k][:half].ljust(half) + TRST
+                out += ' ' * half + TDIVY + L2 + '\n'
+            #end
+        #end
+    #end
+
+    return out
+#end
 
 #------------------------------------------------------------------------------
 #
@@ -449,24 +655,16 @@ def diff2html(df, bi, bj, index):
     DIV2 = YEL + VSP + ESP
  
     # section links
-    html += '<pre style='
-    html += '"background:white;caret-color:transparent;'
+    html += '<pre style="background:white;caret-color:transparent;'
     html += 'border:none;text-align:center">\n'
-    html += '<span '
-    html += 'id="%s"' % index
-    html += 'style="">'
-    if index == 1000:
-       html += ' <a href="#%s">next</a>' % (index + 1)
-       html += '</span>'
-       html += ' ' * (width - 4)
-    else:
-       html += ' <a href="#%s">next</a>' % (index + 1) 
+    html += '<span id="%s" style="">' % index
+    html += ' <a href="#%s">next</a>' % (index + 1)
+    if index != 1000:
        html += ' <a href="#%s">prev</a>' % (index - 1)
-       html += ' <a href="#%s">up</a>' % (1000)
-       html += '</span>'
-       html += ' ' * (width - 12)
+       html += ' <a href="#%s">up</a>' % 1000
     #end
-
+    html += '</span>'
+    html += ' ' * (width - (4 if index == 1000 else 12))
     html += '</pre>'
 
     # section file headers
@@ -497,39 +695,23 @@ def diff2html(df, bi, bj, index):
         L2 = line[middle:]
 
         if dm == ' ':
-           L1 = esc(L1); L2 = esc(L2)
-           html += "%s%s%s\n" % (L1, DIV, L2)
-        else:
-           if dm == '|':
-              nd = ndiff(L1, L2)
-              S1 = ''
-              S2 = ''
-              for i in nd:
-                 ch = esc(i[2])
-                 if i[0] == ' ':
-                    S1 += ch
-                    S2 += ch
-                 if i[0] == '+':
-                    if ch.isspace():
-                       S2 += ch
-                    else:
-                       S2 += GRN + ch + ESP
-                 if i[0] == '-':
-                    if ch.isspace():
-                       S1 += ch
-                    else:
-                       S1 += RED + ch + ESP
-                 #end
-              #end
-              html += '%s%s%s\n' % (S1, DIV2, S2)
-           else:
-              L1 = esc(L1); L2 = esc(L2)
-              if dm == '<':
-                 html += '%s%s%s%s%s\n' % (RED, L1, ESP, DIV, L2)
-              if dm == '>':
-                 html += '%s%s%s%s%s\n' % (L1, DIV, GRN, L2, ESP)
+           html += "%s%s%s\n" % (esc(L1), DIV, esc(L2))
+           continue
+        if dm == '<':
+           html += '%s%s%s%s%s\n' % (RED, esc(L1), ESP, DIV, esc(L2))
+           continue
+        if dm == '>':
+           html += '%s%s%s%s%s\n' % (esc(L1), DIV, GRN, esc(L2), ESP)
+           continue
+        if dm == '|':
+           S1 = ''; S2 = ''
+           for i in ndiff(L1, L2):
+              ch = esc(i[2])
+              if i[0] == ' ': S1 += ch; S2 += ch
+              if i[0] == '+': S2 += ch if ch.isspace() else GRN + ch + ESP
+              if i[0] == '-': S1 += ch if ch.isspace() else RED + ch + ESP
            #end
-
+           html += '%s%s%s\n' % (S1, DIV2, S2)
         #end
 
     #end
@@ -548,54 +730,133 @@ def diff2html(df, bi, bj, index):
 
 prints('post processing')
 
-DN = '2>/dev/null'
-root = '/tmp/refactor-%d' % os.getpid()
-os.system('mkdir -p %s/diffs' % root)
-os.system('mkdir -p %s/files' % root)
-
-def dash(fname): return fname.replace('/', '-')
-
-index = 1000
-
-for (bi, bj) in similar:
-
-    fstr = '%s/files/%d-%s-%d-%d'
-    farg = (root, index, dash(bi.file), bi.range[0], bi.range[1])
-    bifn = fstr % farg
-    farg = (root, index, dash(bj.file), bj.range[0], bj.range[1])
-    bjfn = fstr % farg
-    with open(bifn, 'w') as f: f.write(bi.code)
-    with open(bjfn, 'w') as f: f.write(bj.code)
-
-    dif = '%s/diffs/%d.diff' % (root, index)
-    cmd = 'diff -t -y --width=%d %s %s > %s'
-    cmd = cmd % (args.diff_width, bifn, bjfn, dif)
-    os.system(cmd)
-
-    htf = dif.replace('.diff', '.html')
-    with open(dif, 'r') as f: html = diff2html(f, bi, bj, index)
-    with open(htf, 'w') as f: f.write(html)
-
-    index += 1
-
-#end
-
-prints('', force=1)
+t0 = time.time()
 
 nsimilar = len(similar)
+prints('', force=1)
 
-print(nsimilar, 'similar blocks found')
+if not nsimilar and not args.json:
+   print(nsimilar, 'similar blocks found')
+   if args.timing:
+      print('--- Timing ---')
+      print('Parsing:    %.2fs (%d files, %.1fms/file)' % (tparse, nfiles, tparse*1000/nfiles if nfiles else 0))
+      print('Filtering:  %.2fs (%d -> %d blocks)' % (tfilter, nraw, len(blocks)))
+      print('Comparison: %.2fs' % tcompare)
+   #end
+   sys.exit(0)
+#end
 
-if not nsimilar: sys.exit(0)
+#
+# json output
+#
+if args.json:
+   output = {
+      'version': 1,
+      'files_processed': nfiles,
+      'blocks_total': nraw,
+      'blocks_filtered': len(blocks),
+      'min_block_size': args.min_block_size,
+      'similarity_threshold': args.similarity,
+      'similar_count': nsimilar,
+      'pairs': []
+   }
+   for bi, bj, ratio in similar:
+      output['pairs'].append({
+         'block1': {
+            'file': bi.file,
+            'line_start': bi.range[0],
+            'line_end': bi.range[1],
+            'indent': bi.indent,
+            'size': bi.size
+         },
+         'block2': {
+            'file': bj.file,
+            'line_start': bj.range[0],
+            'line_end': bj.range[1],
+            'indent': bj.indent,
+            'size': bj.size
+         },
+         'similarity': round(ratio, 4)
+      })
+   #end
+   print(json.dumps(output, indent=2))
+   sys.exit(0)
+#end
 
-output = ('refactor-%d.html' % os.getpid())
+#
+# terminal output (default)
+#
+if not args.html:
+   width = cols if cols else 120
+   term_out = '%d similar blocks found\n' % nsimilar
+   for bi, bj, _ in similar:
+      term_out += diff2term(bi, bj, width)
+   #end
+   term_out += '\n'
+   # pipe to less -R for paging with color support
+   if tty:
+      pager = subprocess.Popen(['less', '-R'], stdin=subprocess.PIPE)
+      pager.communicate(input=term_out.encode())
+   else:
+      print(term_out, end='')
+   #end
+#end
 
-if args.output: output = args.output
+#
+# html output
+#
+if args.html:
+   print(nsimilar, 'similar blocks found')
+   DN = '2>/dev/null'
+   root = '/tmp/refactor-%d' % os.getpid()
+   os.system('mkdir -p %s/diffs' % root)
+   os.system('mkdir -p %s/files' % root)
 
-cmd = 'cat %s/diffs/*.html > %s %s ' % (root, output, DN)
-os.system(cmd)
-print('>', output)
+   def dash(fname): return fname.replace('/', '-')
 
-if not args.no_cleanup: os.system('rm -rf %s' % root)
+   index = 1000
+   for (bi, bj, _) in similar:
+      fstr = '%s/files/%d-%s-%d-%d'
+      farg = (root, index, dash(bi.file), bi.range[0], bi.range[1])
+      bifn = fstr % farg
+      farg = (root, index, dash(bj.file), bj.range[0], bj.range[1])
+      bjfn = fstr % farg
+      with open(bifn, 'w') as f: f.write(bi.code)
+      with open(bjfn, 'w') as f: f.write(bj.code)
 
+      dif = '%s/diffs/%d.diff' % (root, index)
+      cmd = 'diff -t -y --width=%d %s %s > %s'
+      cmd = cmd % (args.diff_width, bifn, bjfn, dif)
+      os.system(cmd)
 
+      htf = dif.replace('.diff', '.html')
+      with open(dif, 'r') as f: html = diff2html(f, bi, bj, index)
+      with open(htf, 'w') as f: f.write(html)
+
+      index += 1
+   #end
+
+   output = ('refactor-%d.html' % os.getpid())
+   if args.output: output = args.output
+
+   cmd = 'cat %s/diffs/*.html > %s %s ' % (root, output, DN)
+   os.system(cmd)
+   print('>', output)
+
+   if not args.no_cleanup: os.system('rm -rf %s' % root)
+#end
+
+toutput = time.time() - t0
+
+#
+# timing output
+#
+if args.timing:
+   ttotal = tparse + tfilter + tcompare + toutput
+   print('--- Timing ---')
+   print('Parsing:    %.2fs (%d files, %.1fms/file)' % (tparse, nfiles, tparse*1000/nfiles if nfiles else 0))
+   print('Filtering:  %.2fs (%d -> %d blocks)' % (tfilter, nraw, len(blocks)))
+   print('Comparison: %.2fs' % tcompare)
+   print('Output:     %.2fs' % toutput)
+   print('Total:      %.2fs' % ttotal)
+#end
