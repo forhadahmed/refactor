@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import io, os, sys, time, json, argparse, subprocess
+from collections import defaultdict
 
 from difflib import SequenceMatcher as SM
 from difflib import ndiff as ndiff
@@ -28,6 +29,9 @@ parser.add_argument('--trace-mlstr', action='store_true') # Python multiline tra
 parser.add_argument('--verbose-errors', action='store_true') # detailed errors
 parser.add_argument('--timing', action='store_true') # timing breakdown
 parser.add_argument('--json', action='store_true') # json output
+parser.add_argument('--shingle-k', default=7, type=int) # shingle size for pre-filter
+parser.add_argument('--no-shingle', action='store_true') # skip shingle pre-filter (for testing)
+parser.add_argument('--show-pairs', action='store_true') # show candidate pairs and exit
 
 args, inputs = parser.parse_known_args()
 
@@ -104,6 +108,22 @@ class block:
        self.code = ''.join(self.codebuf)
        self.codebuf = []
    #end
+
+   # compute k-character shingle hashes for fast similarity pre-filter
+   def compute_shingles(self, k=7):
+       if len(self.code) < k:
+          self.shingles = frozenset()
+       else:
+          self.shingles = frozenset(
+             hash(self.code[i:i+k]) for i in range(len(self.code) - k + 1)
+          )
+   #end
+#end
+
+# jaccard similarity of two sets
+def jaccard(s1, s2):
+    if not s1 or not s2: return 0
+    return len(s1 & s2) / len(s1 | s2)
 #end
 
 #-- Python --------------------------------------------------------------------
@@ -371,6 +391,9 @@ tparse = time.time() - t0
 # finalize all blocks (join code buffers)
 for b in blocks: b.finalize()
 
+# compute shingles for similarity pre-filter
+for b in blocks: b.compute_shingles(args.shingle_k)
+
 # filter out small blocks
 t0 = time.time()
 nraw = len(blocks)
@@ -441,115 +464,151 @@ if args.p or args.b:
 #------------------------------------------------------------------------------
 
 
-groups = { 0:[] }
+#------------------------------------------------------------------------------
+# Pre-compute file relationships
+#------------------------------------------------------------------------------
 
-for b in blocks:
-    bf = b.file
-    groups[0] += [b] # global group
-    if bf not in groups: groups[bf] = []
-    groups[bf] += [b]
+fcache = {}
+files = list(set(b.file for b in blocks))
+for i, f1 in enumerate(files):
+    for f2 in files[i:]:
+        if f1 == f2:
+            fcache[(f1, f2)] = True
+        else:
+            related = SM(None, f1, f2).ratio() >= 0.9
+            fcache[(f1, f2)] = related
+            fcache[(f2, f1)] = related
 #end
 
-groups = {
-   k : sorted(groups[k], key=lambda x: len(x.code), reverse=True)
-   for k in groups
-}
-
-skip = set()
-bidx = {}
-
-def skip_children(b, visited=None):
-    if visited is None: visited = set()
-    if id(b) in visited: return
-    visited.add(id(b))
-    for ch in b.children:
-      if ch in bidx:
-        skip.add(bidx[ch])
-        skip_children(ch, visited)
-    #end
+def files_related(f1, f2):
+    if args.all_files: return True
+    return fcache.get((f1, f2), False)
 #end
 
-def ancestor(a, b):
+# check if b is ancestor of a
+def is_ancestor(a, b):
     p = a.parent
     visited = set()
     while p:
-       if id(p) in visited: return 0  # cycle detected
+       if id(p) in visited: return False
        visited.add(id(p))
-       if b == p: return 1
+       if b == p: return True
        p = p.parent
-    #end
-    return 0
+    return False
 #end
 
-fcache = {}
-
-# return true to skip block comparison based on filenames
-def skip_unrelated_files(f1, f2):
-    global fcache
-    if args.all_files: return False
-    if f1 == f2: return False
-    if (f1,f2) in fcache: return fcache[(f1,f2)]
-    if (f2,f1) in fcache: return fcache[(f2,f1)]
-    fcache[(f1,f2)] = SM(None, f1, f2).ratio() < 0.9
-    return fcache[(f1,f2)]
+# check if block is descendant of any block in matched_ids
+def is_descendant_of_any(block, matched_ids):
+    p = block.parent
+    while p:
+       if id(p) in matched_ids: return True
+       p = p.parent
+    return False
 #end
 
-similar = []
+#------------------------------------------------------------------------------
+# Pre-partition by indent level
+#------------------------------------------------------------------------------
 
-keys = {0} # use the global block list for now
+if args.all_indents:
+    indent_groups = {0: blocks}
+else:
+    indent_groups = defaultdict(list)
+    for b in blocks:
+        indent_groups[b.indent].append(b)
+#end
 
+#------------------------------------------------------------------------------
+# Generate candidate pairs (with cheap filters)
+#------------------------------------------------------------------------------
+
+# generate (bi, bj) pairs passing cheap filters
+def generate_pairs(blist):
+    sorted_list = sorted(blist, key=lambda x: -x.size)
+    L = len(sorted_list)
+    pairs = []
+    for i in range(L):
+        bi = sorted_list[i]
+        for j in range(i+1, L):
+            bj = sorted_list[j]
+            # size window check
+            if bi.size - bj.size > args.max_block_diff: break
+            # file relationship check
+            if not files_related(bi.file, bj.file): continue
+            # ancestor check
+            if is_ancestor(bi, bj) or is_ancestor(bj, bi): continue
+            # shingle pre-filter (jaccard > 0.3 as loose pre-filter)
+            if not args.no_shingle and jaccard(bi.shingles, bj.shingles) < 0.3: continue
+            pairs.append((bi, bj))
+    return pairs
+#end
+
+# compare a single pair - returns (bi, bj, ratio) or None
+def compare_pair(pair):
+    bi, bj = pair
+    sm = SM(None, bi.code, bj.code)
+    if sm.quick_ratio() < args.similarity: return None
+    ratio = sm.ratio()
+    if ratio < args.similarity: return None
+    return (bi, bj, ratio)
+#end
+
+#------------------------------------------------------------------------------
+# Main comparison loop
+#------------------------------------------------------------------------------
+
+all_matches = []
 t0 = time.time()
 
-for k in keys:
+# --show-pairs: count candidate pairs and exit
+if args.show_pairs:
+    total_pairs = 0
+    potential_pairs = 0
+    for indent, blist in indent_groups.items():
+        n = len(blist)
+        potential_pairs += n * (n - 1) // 2
+        pairs = generate_pairs(blist)
+        total_pairs += len(pairs)
+        print('indent %d: %d blocks -> %d candidate pairs' % (indent, n, len(pairs)))
+    print('---')
+    print('Total blocks: %d' % len(blocks))
+    print('Potential pairs (B²/2): %d' % potential_pairs)
+    print('After shingle filter: %d (%.2f%%)' % (total_pairs, 100*total_pairs/potential_pairs if potential_pairs else 0))
+    sys.exit(0)
+#end
 
-   blist = groups[k]
-   bidx = {b: i for i, b in enumerate(blist)}
+for indent, blist in indent_groups.items():
+    prints('indent level %d: %d blocks' % (indent, len(blist)), rate=1)
 
-   L = len(blist)
+    pairs = generate_pairs(blist)
+    if args.timing: print('  indent %d: %d candidate pairs' % (indent, len(pairs)))
+    if not pairs: continue
 
-   for i in range(0, L):
+    matches = []
+    for idx, pair in enumerate(pairs):
+        if idx % 100 == 0: prints('comparing %d/%d' % (idx, len(pairs)), rate=1)
+        result = compare_pair(pair)
+        if result: matches.append(result)
+    #end
 
-      for j in range(i+1, L):
+    all_matches.extend(matches)
+#end
 
-         prints('comparing blocks %4d - %4d %s' % (i,L,k), rate=500)
+# Phase 3: Filter redundant child matches (globally across all indent levels)
+all_matches.sort(key=lambda x: -max(x[0].size, x[1].size))
+matched_ids = set()
+similar = []
 
-         # skip if either block is a child of matched block
-         if i in skip or j in skip: continue
-
-         bi = blist[i]; bj = blist[j]
-
-         # break if size diff too large (blocks sorted by size, so all remaining j are smaller)
-         if bi.size - bj.size > args.max_block_diff: break
-
-         # skip if filenames are unrelated
-         if skip_unrelated_files(bi.file, bj.file): continue
-
-         # skip if one block is a parent of another
-         if ancestor(bi, bj) or ancestor(bj, bi): continue
-
-         # skip if blocks are not on the same indent
-         if not args.all_indents and bi.indent != bj.indent: continue
-
-         # do the comparison (skip if blocks are not similar)
-         sm = SM(None, bi.code, bj.code)
-         if sm.quick_ratio() < args.similarity: continue
-         ratio = sm.ratio()
-         if ratio < args.similarity: continue
-
-         # found similar blocks - add their children to the skip list
-         skip_children(bi); skip_children(bj)
-
-         # save the similar blocks for post-processing (smaller first, with ratio)
-         if bj.size > bi.size:
-            similar.append((bi, bj, ratio))
-         else:
-            similar.append((bj, bi, ratio))
-         #end
-
-      #end
-
-   #end
-
+for bi, bj, ratio in all_matches:
+    if is_descendant_of_any(bi, matched_ids): continue
+    if is_descendant_of_any(bj, matched_ids): continue
+    # save match (smaller block first)
+    if bj.size > bi.size:
+        similar.append((bi, bj, ratio))
+    else:
+        similar.append((bj, bi, ratio))
+    matched_ids.add(id(bi))
+    matched_ids.add(id(bj))
 #end
 
 tcompare = time.time() - t0

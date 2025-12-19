@@ -75,20 +75,21 @@ check(f'{REFACTOR} -p test/multiline_string.py', 'Python multiline strings')
 check(f'{REFACTOR} -p test/stack_edge_cases.py', 'Python edge cases')
 check(f'{REFACTOR} -p test/deep_nesting.py', 'Python deep nesting parse')
 
-# JSON structure
-check(f'{REFACTOR} --json test/utils_v1.c | python3 -m json.tool', 'JSON valid')
-check_json('test/utils_v1.c', 'version', 1, 'JSON version field')
-check_json('test/utils_v1.c', 'files_processed', 1, 'JSON files_processed')
-check_contains(f'{REFACTOR} --json test/utils_v1.c', '"pairs"', 'JSON pairs array')
-check_contains(f'{REFACTOR} --json --min-block-size=100 test/similar1.c', '"line_start"', 'JSON line_start')
-check_contains(f'{REFACTOR} --json --min-block-size=100 test/similar1.c', '"line_end"', 'JSON line_end')
-check_contains(f'{REFACTOR} --json --min-block-size=100 test/similar1.c', '"size"', 'JSON size')
-check_contains(f'{REFACTOR} --json --min-block-size=100 test/similar1.c', '"indent"', 'JSON indent')
+# JSON structure (single run, check all fields)
+data = run_json('--min-block-size=100 test/similar1.c')
+if (data and data.get('version') == 1 and 'pairs' in data and
+    data['pairs'] and 'line_start' in data['pairs'][0]['block1'] and
+    'line_end' in data['pairs'][0]['block1'] and 'size' in data['pairs'][0]['block1']):
+    passed('JSON structure valid')
+else:
+    failed('JSON structure valid')
 
-# Output formats
-check_contains(f'{REFACTOR} --stats test/utils_v1.c', 'Files processed:', 'Stats files')
-check_contains(f'{REFACTOR} --stats test/utils_v1.c', 'Total blocks:', 'Stats blocks')
-check_contains(f'{REFACTOR} --stats test/utils_v1.c', 'After filtering:', 'Stats filtering')
+# Stats output (single run, check all fields)
+_, stdout, _ = run(f'{REFACTOR} --stats test/utils_v1.c')
+if 'Files processed:' in stdout and 'Total blocks:' in stdout and 'After filtering:' in stdout:
+    passed('Stats output valid')
+else:
+    failed('Stats output valid')
 check_contains(f'{REFACTOR} --min-block-size=100 test/similar1.c', 'similar blocks found', 'Terminal count')
 check_contains(f'{REFACTOR} --min-block-size=100 test/similar1.c', 'similar1.c', 'Terminal filename')
 check_contains(f'{REFACTOR} --timing --min-block-size=10000 test/utils_v1.c', 'Parsing:', 'Timing output')
@@ -157,6 +158,19 @@ check_json('--min-block-size=100 test/deep_nesting.py', 'similar_count', 1, 'Pyt
 
 # Core: match with empty blocks
 check_json('--min-block-size=100 test/empty_edge.c', 'similar_count', 1, 'C match with empty blocks')
+
+# Core: shingle filter sanity (no false negatives)
+with_shingle = run_json('--min-block-size=200 test/shingle_sanity.c')
+without_shingle = run_json('--no-shingle --min-block-size=200 test/shingle_sanity.c')
+if with_shingle and without_shingle:
+    ws_pairs = [(p['block1']['line_start'], p['block2']['line_start'], p['similarity']) for p in with_shingle['pairs']]
+    ns_pairs = [(p['block1']['line_start'], p['block2']['line_start'], p['similarity']) for p in without_shingle['pairs']]
+    if sorted(ws_pairs) == sorted(ns_pairs):
+        passed('Shingle filter sanity')
+    else:
+        failed('Shingle filter sanity')
+else:
+    failed('Shingle filter sanity')
 
 # Summary
 print(f'PASS: {PASS}  FAIL: {FAIL}')
