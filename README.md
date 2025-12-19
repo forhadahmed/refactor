@@ -48,7 +48,43 @@ Example:
 ![usage](https://user-images.githubusercontent.com/2707770/167070282-9bbf69dd-1fe9-4a98-a8bd-4cccf8ce9def.gif)
  
 
-The output of the tool is an [HTML report](#examples) containing the similar blocks found (with side-by-side diffs):
+By default, the tool outputs a side-by-side diff to the terminal with color highlighting (piped through `less -R` for paging).  Lines with differences are marked with `*`:
+
+```
+-----------------------------------------------------------------------------------------------------------------
+ linux/net/core/rtnetlink.c:4137                            |  linux/net/core/rtnetlink.c:4029
+-----------------------------------------------------------------------------------------------------------------
+ struct net *net = sock_net(skb->sk);                       |  struct net *net = sock_net(skb->sk);
+ struct ndmsg *ndm;                                         |  struct ndmsg *ndm;
+ struct nlattr *tb[NDA_MAX+1];                              |  struct nlattr *tb[NDA_MAX+1];
+ struct net_device *dev;                                    |  struct net_device *dev;
+*__u8 *addr;                                                | *u8 *addr;
+*int err;                                                   | *
+*u16 vid;                                                   | *u16 vid;
+*                                                           | *int err;
+*if (!netlink_capable(skb, CAP_NET_ADMIN))                  | *
+*    return -EPERM;                                         | *
+*                                                           | *
+ err = nlmsg_parse_deprecated(nlh, sizeof(*ndm), tb, ...    |  err = nlmsg_parse_deprecated(nlh, sizeof(*ndm), tb, ...
+                              extack);                      |                               extack);
+                                                            |
+ if (err < 0)                                               |  if (err < 0)
+     return err;                                            |      return err;
+                                                            |
+ ndm = nlmsg_data(nlh);                                     |  ndm = nlmsg_data(nlh);
+ if (ndm->ndm_ifindex == 0) {                               |  if (ndm->ndm_ifindex == 0) {
+     NL_SET_ERR_MSG(extack, "invalid ifindex");             |      NL_SET_ERR_MSG(extack, "invalid ifindex");
+     return -EINVAL;                                        |      return -EINVAL;
+ }                                                          |  }
+                                                            |
+ dev = __dev_get_by_index(net, ndm->ndm_ifindex);           |  dev = __dev_get_by_index(net, ndm->ndm_ifindex);
+ if (dev == NULL) {                                         |  if (dev == NULL) {
+     NL_SET_ERR_MSG(extack, "unknown ifindex");             |      NL_SET_ERR_MSG(extack, "unknown ifindex");
+     return -ENODEV;                                        |      return -ENODEV;
+ }                                                          |  }
+```
+
+Use `--html` to generate an HTML report instead:
 
 ![image](https://user-images.githubusercontent.com/2707770/167007824-937948cc-ece8-4c5d-a5b4-7580999e4a53.png)
 
