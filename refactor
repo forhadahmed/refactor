@@ -89,14 +89,20 @@ class block:
        self.range = [line,-1]
        self.indent = indent
        self.parent = parent
+       self.codebuf = []
        self.code = ""
        self.children = []
        if self.parent: parent.children.append(self)
    #end
 
    def add_code(self, c):
-       self.code += c
+       self.codebuf.append(c)
        if self.parent: self.parent.add_code(c)
+   #end
+
+   def finalize(self):
+       self.code = ''.join(self.codebuf)
+       self.codebuf = []
    #end
 #end
 
@@ -128,14 +134,12 @@ def process_py(fn, line, ln, indent):
     #end
 
     if indent < top.indent:
-       if not stack:
-          print('[!] %s:%d' % (fn, ln)) # error
-          return False
-       while 1:
+       while len(stack) > 1:
           b = stack.pop()
           b.range[1] = ln
           top = stack[-1]
           if indent >= top.indent: break
+       #end
        top.add_code(line)
     #end
 
@@ -252,13 +256,16 @@ def process_cfile(fn, f):
 
     global state, ln, state_history
 
-    ch = 0; pch = 0; esc = 0
+    pch = 0; esc = 0
     state_history = []
 
-    while 1:
+    content = f.read()
+    L = len(content)
+    i = 0
 
-      ch = f.read(1)
-      if not ch: break
+    while i < L:
+      ch = content[i]
+      i += 1
       if ch == '\n': ln += 1
 
       pstate = state
@@ -267,13 +274,11 @@ def process_cfile(fn, f):
          if ch == '#': state = macro
          if ch == '"': state = string1
          if ch == "'": state = string2
-         if ch == '/':
+         if ch == '/' and i < L:
             if not process_ch(fn, ch, ln): break
-
-            ch = f.read(1)
-            if not ch: break
+            ch = content[i]
+            i += 1
             if ch == '\n': ln += 1
-
             if ch == '/': state = comment1
             if ch == '*': state = comment2
 
@@ -363,6 +368,9 @@ for fn in inputs:
 
 tparse = time.time() - t0
 
+# finalize all blocks (join code buffers)
+for b in blocks: b.finalize()
+
 # filter out small blocks
 t0 = time.time()
 nraw = len(blocks)
@@ -450,18 +458,23 @@ groups = {
 skip = set()
 bidx = {}
 
-def skip_children(b):
-    global skip
+def skip_children(b, visited=None):
+    if visited is None: visited = set()
+    if id(b) in visited: return
+    visited.add(id(b))
     for ch in b.children:
       if ch in bidx:
         skip.add(bidx[ch])
-        skip_children(ch)
+        skip_children(ch, visited)
     #end
 #end
 
 def ancestor(a, b):
     p = a.parent
+    visited = set()
     while p:
+       if id(p) in visited: return 0  # cycle detected
+       visited.add(id(p))
        if b == p: return 1
        p = p.parent
     #end
