@@ -8,32 +8,42 @@ from difflib import ndiff as ndiff
 #------------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--min-block-size', default=1500, type=int)
-parser.add_argument('--max-block-diff', default=500, type=int)
-parser.add_argument('--similarity', default=0.8, type=float)
-parser.add_argument('--diff-width', default=180, type=int)
-parser.add_argument('--no-cleanup', action='store_true')
-parser.add_argument('--all-indents', action='store_true')
-parser.add_argument('--all-files', action='store_true')
-parser.add_argument('--python', action='store_true')
-parser.add_argument('-f', action='store_true') # file filters
-parser.add_argument('-p', action='store_true') # parse only
-parser.add_argument('-b', action='store_true') # show blocks
-parser.add_argument('-d', action='store_true') # debug
-parser.add_argument('-o', '--output')
-parser.add_argument('--html', action='store_true') # html output (default is terminal)
-parser.add_argument('--stats', action='store_true') # block statistics
-parser.add_argument('--tree', action='store_true') # block tree view
-parser.add_argument('--trace-state', action='store_true') # C parser state trace
-parser.add_argument('--trace-mlstr', action='store_true') # Python multiline trace
-parser.add_argument('--verbose-errors', action='store_true') # detailed errors
-parser.add_argument('--timing', action='store_true') # timing breakdown
-parser.add_argument('--json', action='store_true') # json output
-parser.add_argument('--shingle-k', default=7, type=int) # shingle size for pre-filter
-parser.add_argument('--no-shingle', action='store_true') # skip shingle pre-filter (for testing)
-parser.add_argument('--show-pairs', action='store_true') # show candidate pairs and exit
+
+input_group = parser.add_argument_group('Input')
+input_group.add_argument('-f', action='store_true', help='Filter stdin file list by known extensions.')
+input_group.add_argument('--python', action='store_true', help='Force Python parser for all files.')
+
+parse_group = parser.add_argument_group('Parsing')
+parse_group.add_argument('-b', action='store_true', help='Print parsed blocks and exit.')
+parse_group.add_argument('-d', action='store_true', help='Debug output (parser state, traces, verbose errors).')
+parse_group.add_argument('--tree', action='store_true', help='Print the block tree.')
+parse_group.add_argument('--stats', action='store_true', help='Print block statistics.')
+
+compare_group = parser.add_argument_group('Comparison')
+compare_group.add_argument('--similarity', default=0.8, type=float, help='Similarity threshold (SequenceMatcher ratio).')
+compare_group.add_argument('--min-block-size', default=1500, type=int, help='Minimum block size in chars.')
+compare_group.add_argument('--max-block-diff', default=500, type=int, help='Max block size difference in chars.')
+compare_group.add_argument('--all-indents', action='store_true', help='Compare blocks across indent levels.')
+compare_group.add_argument('--all-files', action='store_true', help='Compare blocks across all files.')
+compare_group.add_argument('--all', action='store_true', help='--all-indents and --all-files.')
+compare_group.add_argument('--shingle-k', default=7, type=int, help=argparse.SUPPRESS)
+compare_group.add_argument('--no-shingle', action='store_true', help=argparse.SUPPRESS)
+compare_group.add_argument('--show-pairs', action='store_true', help=argparse.SUPPRESS)
+
+output_group = parser.add_argument_group('Output')
+output_group.add_argument('-o', '--output', help='Output file for HTML report.')
+output_group.add_argument('--diff-width', default=180, type=int, help='Diff width for terminal/HTML output.')
+output_group.add_argument('--html', action='store_true', help='Write HTML report.')
+output_group.add_argument('--json', action='store_true', help='Write JSON output.')
+output_group.add_argument('--no-cleanup', action='store_true', help='Keep temporary HTML files.')
+output_group.add_argument('--timing', action='store_true', help='Print timing breakdown.')
 
 args, inputs = parser.parse_known_args()
+
+# expand combined flags
+if args.all:
+   args.all_indents = True
+   args.all_files = True
 
 filters = 'c,cpp,h,hh,hpp,py,go,rs,java,js,swift,php'
 
@@ -80,6 +90,12 @@ def prints(s, rate=1, force=0):
        sys.stdout.write(s + ' ' * (cols - len(s)) + '\r')
        sys.stdout.flush()
 
+# clear spinner line before output
+def printc():
+    if tty and sidx > 0:
+       sys.stdout.write(' ' * cols + '\r')
+       sys.stdout.flush()
+
 #------------------------------------------------------------------------------
 #
 #  Parsing
@@ -124,6 +140,16 @@ class block:
 def jaccard(s1, s2):
     if not s1 or not s2: return 0
     return len(s1 & s2) / len(s1 | s2)
+#end
+
+def is_python_file(fn):
+    if fn.endswith('.py'): return True
+    try:
+       with open(fn, 'rb') as f: first = f.readline(200)
+    except:
+       return False
+    if not first.startswith(b'#!'): return False
+    return (b'python' in first)
 #end
 
 #-- Python --------------------------------------------------------------------
@@ -188,19 +214,19 @@ def process_pfile(fn, f):
         # check for multiline string start/end
         if mlstr:
            if mlstr == 1 and '"""' in line:
-              if args.trace_mlstr: print('MLSTR """ EXIT  %s:%d (%d lines)' % (fn, ln, ln - mlstr_start))
+              if args.d: print('MLSTR """ EXIT  %s:%d (%d lines)' % (fn, ln, ln - mlstr_start))
               mlstr = 0
            if mlstr == 2 and "'''" in line:
-              if args.trace_mlstr: print("MLSTR ''' EXIT  %s:%d (%d lines)" % (fn, ln, ln - mlstr_start))
+              if args.d: print("MLSTR ''' EXIT  %s:%d (%d lines)" % (fn, ln, ln - mlstr_start))
               mlstr = 0
            stack[-1].add_code(line)
            continue
         if not is_comment and '"""' in line and line.count('"""') == 1:
            mlstr = 1; mlstr_start = ln
-           if args.trace_mlstr: print('MLSTR """ ENTER %s:%d' % (fn, ln))
+           if args.d: print('MLSTR """ ENTER %s:%d' % (fn, ln))
         elif not is_comment and "'''" in line and line.count("'''") == 1:
            mlstr = 2; mlstr_start = ln
-           if args.trace_mlstr: print("MLSTR ''' ENTER %s:%d" % (fn, ln))
+           if args.d: print("MLSTR ''' ENTER %s:%d" % (fn, ln))
 
         indent = 0
         for ch in line:
@@ -318,10 +344,10 @@ def process_cfile(fn, f):
          if ch == '/' and pch == '*': state = code
       #end
 
-      if state != pstate and args.trace_state:
+      if state != pstate and args.d:
          tr = '%s -> %s' % (state_names[pstate], state_names[state])
          print('TRACE %s:%d %s (ch=%s)' % (fn, ln, tr, repr(ch)))
-      if state != pstate and args.verbose_errors:
+      if state != pstate and args.d:
          state_history.append((ln, pstate, state, ch))
          if len(state_history) > 5: state_history.pop(0)
 
@@ -334,7 +360,7 @@ def process_cfile(fn, f):
 
     if not indent and not stack: return
     print('[!] %s:%d' % (fn, ln)) # error
-    if not args.verbose_errors: return
+    if not args.d: return
     print('    indent=%d stack_depth=%d state=%s' % (indent, len(stack), state_names[state]))
     if state_history:
        print('    last state changes:')
@@ -373,7 +399,8 @@ for fn in inputs:
 
       prints(fn)
 
-      if fn.endswith('.py') or args.python:
+      use_python = (args.python or is_python_file(fn))
+      if use_python:
          with open(fn) as f: process_pfile(fn, f)
       else:
          with open(fn) as f: process_cfile(fn, f)
@@ -394,6 +421,8 @@ for b in blocks: b.finalize()
 # compute shingles for similarity pre-filter
 for b in blocks: b.compute_shingles(args.shingle_k)
 
+all_blocks = list(blocks)
+
 # filter out small blocks
 t0 = time.time()
 nraw = len(blocks)
@@ -405,6 +434,7 @@ tfilter = time.time() - t0
 # stats output
 #
 if args.stats:
+   printc()
    sizes = [len(b.code) for b in blocks]
    indents = {}
    for b in blocks: indents[b.indent] = indents.get(b.indent, 0) + 1
@@ -419,6 +449,7 @@ if args.stats:
    #end
    istr = ', '.join(['L%d=%d' % (k, indents[k]) for k in sorted(indents.keys())])
    print('Blocks by indent: %s' % istr)
+   sys.exit(0)
 #end
 
 #
@@ -434,18 +465,20 @@ def print_tree(b, prefix=''):
 #end
 
 if args.tree:
+   printc()
    print('--- Block Tree ---')
-   roots = [b for b in blocks if b.parent is None or b.parent not in blocks]
+   roots = [b for b in all_blocks if b.parent is None or b.parent not in all_blocks]
    for r in roots: print_tree(r)
+   sys.exit(0)
 #end
 
 #
 # debugging
 #
-if args.p or args.b:
-   print(len(blocks), 'blocks')
-   if args.b:
-      for b in blocks:
+if args.b:
+   printc()
+   print(len(all_blocks), 'blocks')
+   for b in all_blocks:
           hlen = len(b.file)+30
           print('-'*hlen)
           print('%s:%d - %d'%(b.file,b.range[0],b.indent))
@@ -562,6 +595,7 @@ t0 = time.time()
 
 # --show-pairs: count candidate pairs and exit
 if args.show_pairs:
+    printc()
     total_pairs = 0
     potential_pairs = 0
     for indent, blist in indent_groups.items():
@@ -806,6 +840,7 @@ t0 = time.time()
 
 nsimilar = len(similar)
 prints('', force=1)
+printc()
 
 if not nsimilar and not args.json:
    print(nsimilar, 'similar blocks found')
