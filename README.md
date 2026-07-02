@@ -120,12 +120,12 @@ The tool parses all blocks from source files and does pairwise comparison for "s
 
 | Project | Repository | Results |
 |:--------|:-----------|:--------|
-| Linux Kernel Ethernet Drivers | [torvalds/linux](https://github.com/torvalds/linux) | [drivers.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/drivers.html) (~400 similar blocks) |
-| C++ JSON Library | [nlohmann/json](https://github.com/nlohmann/json) | [json.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/json.html) (~350 similar blocks) |
-| Bitcoin + Dogecoin | [bitcoin/bitcoin](https://github.com/bitcoin/bitcoin) | [crypto.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/crypto.html) (~270 similar blocks) |
-| Go BGP Implementation | [osrg/gobgp](https://github.com/osrg/gobgp) | [gobgp.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/gobgp.html) (~250 similar blocks) |
-| Google Protobuf | [protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf) | [protobuf.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/protobuf.html) (~215 similar blocks) |
-| Dear ImGui | [ocornut/imgui](https://github.com/ocornut/imgui) | [imgui.html](https://rawcdn.githack.com/forhadahmed/refactor/main/examples/imgui.html) (~30 similar blocks) |
+| Linux Kernel Ethernet Drivers | [torvalds/linux](https://github.com/torvalds/linux) | [drivers.html](https://forhadahmed.github.io/refactor/examples/drivers.html) (~400 similar blocks) |
+| C++ JSON Library | [nlohmann/json](https://github.com/nlohmann/json) | [json.html](https://forhadahmed.github.io/refactor/examples/json.html) (~350 similar blocks) |
+| Bitcoin + Dogecoin | [bitcoin/bitcoin](https://github.com/bitcoin/bitcoin) | [crypto.html](https://forhadahmed.github.io/refactor/examples/crypto.html) (~270 similar blocks) |
+| Go BGP Implementation | [osrg/gobgp](https://github.com/osrg/gobgp) | [gobgp.html](https://forhadahmed.github.io/refactor/examples/gobgp.html) (~250 similar blocks) |
+| Google Protobuf | [protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf) | [protobuf.html](https://forhadahmed.github.io/refactor/examples/protobuf.html) (~215 similar blocks) |
+| Dear ImGui | [ocornut/imgui](https://github.com/ocornut/imgui) | [imgui.html](https://forhadahmed.github.io/refactor/examples/imgui.html) (~30 similar blocks) |
 
 **Interesting find:** [Dogecoin](https://github.com/dogecoin/dogecoin) and [Bitcoin](https://github.com/bitcoin/bitcoin) share massive code duplication since Dogecoin is a fork. A common library would clean things up significantly!
 
